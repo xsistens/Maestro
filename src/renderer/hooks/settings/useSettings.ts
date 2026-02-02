@@ -17,6 +17,41 @@ import type {
 
 // VCS mode type for Version Control System preference
 export type VcsMode = 'git' | 'jj' | 'auto';
+
+/**
+ * Determines the active VCS mode based on user preference and system state.
+ * This helper function is used to resolve 'auto' mode and handle fallbacks
+ * when jj is not installed.
+ *
+ * @param vcsMode - User's VCS preference ('git' | 'jj' | 'auto')
+ * @param hasJjRepo - Whether the current directory is a jj repository
+ * @param jjInstalled - Whether jj is installed on the system
+ * @returns The effective VCS to use ('git' | 'jj')
+ */
+export function getActiveVcsMode(
+	vcsMode: VcsMode,
+	hasJjRepo: boolean,
+	jjInstalled: boolean
+): 'git' | 'jj' {
+	// Explicit git mode always uses git
+	if (vcsMode === 'git') {
+		return 'git';
+	}
+
+	// Explicit jj mode - use jj if installed, otherwise fall back to git
+	if (vcsMode === 'jj') {
+		return jjInstalled ? 'jj' : 'git';
+	}
+
+	// Auto mode: use jj if installed AND we're in a jj repo, otherwise git
+	if (vcsMode === 'auto') {
+		return jjInstalled && hasJjRepo ? 'jj' : 'git';
+	}
+
+	// Default fallback (shouldn't reach here with valid VcsMode)
+	return 'git';
+}
+
 import { DEFAULT_CUSTOM_THEME_COLORS } from '../../constants/themes';
 import { DEFAULT_SHORTCUTS, TAB_SHORTCUTS, FIXED_SHORTCUTS } from '../../constants/shortcuts';
 import { getLevelIndex } from '../../constants/keyboardMastery';
@@ -1316,33 +1351,22 @@ export function useSettings(): UseSettingsReturn {
 	}, []);
 
 	// VCS mode setter (git, jj, or auto)
-	const setVcsMode = useCallback((value: VcsMode) => {
-		setVcsModeState(value);
-		window.maestro.settings.set('vcsMode', value);
-	}, []);
+	// Validates that jj is installed before allowing 'jj' mode
+	const setVcsMode = useCallback(
+		(value: VcsMode) => {
+			// Prevent setting 'jj' mode if jj is not installed
+			if (value === 'jj' && !jjInstalled) {
+				console.warn(
+					'[Settings] Cannot set VCS mode to "jj" - Jujutsu is not installed. Keeping current mode.'
+				);
+				return;
+			}
 
-	// Custom jj binary path setter
-	const setJjPath = useCallback((value: string) => {
-		setJjPathState(value);
-		window.maestro.settings.set('jjPath', value);
-	}, []);
-
-	// Check if jj is installed and update the jjInstalled state
-	const checkJjInstallation = useCallback(async () => {
-		try {
-			const installed = await window.maestro.jj.isInstalled();
-			setJjInstalledState(installed);
-		} catch (error) {
-			console.error('[Settings] Failed to check jj installation:', error);
-			setJjInstalledState(false);
-		}
-	}, []);
-
-	// VCS mode setter (git, jj, or auto)
-	const setVcsMode = useCallback((value: VcsMode) => {
-		setVcsModeState(value);
-		window.maestro.settings.set('vcsMode', value);
-	}, []);
+			setVcsModeState(value);
+			window.maestro.settings.set('vcsMode', value);
+		},
+		[jjInstalled]
+	);
 
 	// Custom jj binary path setter
 	const setJjPath = useCallback((value: string) => {
@@ -1865,6 +1889,17 @@ export function useSettings(): UseSettingsReturn {
 			document.documentElement.style.fontSize = `${fontSize}px`;
 		}
 	}, [fontSize, settingsLoaded]);
+
+	// Check jj installation when vcsMode is 'jj' or 'auto'
+	// This runs after settings are loaded and when vcsMode changes
+	useEffect(() => {
+		if (!settingsLoaded) return;
+
+		// Only check installation for modes that might use jj
+		if (vcsMode === 'jj' || vcsMode === 'auto') {
+			checkJjInstallation();
+		}
+	}, [vcsMode, settingsLoaded, checkJjInstallation]);
 
 	// PERF: Memoize return object to prevent unnecessary re-renders in consumers
 	return useMemo(
