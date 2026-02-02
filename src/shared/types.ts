@@ -391,3 +391,107 @@ export interface GlobalAgentStats {
 	/** Per-provider breakdown */
 	byProvider: Record<string, ProviderStats>;
 }
+
+// ============================================================================
+// Jujutsu (jj) Version Control Types
+// ============================================================================
+
+/**
+ * File status in jj working copy
+ * Maps to jj status output indicators: A (added), M (modified), D (deleted), R (renamed), C (copied)
+ */
+export type JjFileStatusType = 'A' | 'M' | 'D' | 'R' | 'C';
+
+/**
+ * Represents a file change from jj status output
+ */
+export interface JjFileStatus {
+	path: string;
+	status: JjFileStatusType;
+}
+
+/**
+ * Status of the jj working copy
+ * Parsed from `jj status` output
+ */
+export interface JjStatus {
+	/** Files with changes in the working copy */
+	files: JjFileStatus[];
+	/** Working copy change ID (short form like 'qzmzpxyl') */
+	workingCopyChangeId: string;
+	/** Working copy commit ID (short form like 'bc915fcd') */
+	workingCopyCommitId: string;
+	/** Working copy description */
+	workingCopyDescription: string;
+	/** Whether working copy is empty */
+	workingCopyEmpty: boolean;
+	/** Parent commit change ID */
+	parentChangeId: string;
+	/** Parent commit commit ID */
+	parentCommitId: string;
+	/** Parent commit description */
+	parentDescription: string;
+	/** Whether parent commit is empty */
+	parentEmpty: boolean;
+	/** Whether there are conflicts in the working copy */
+	hasConflicts: boolean;
+	/** Conflicted file paths */
+	conflictedFiles: string[];
+}
+
+/**
+ * Represents a jj bookmark (formerly called branch)
+ * Parsed from `jj bookmark list` output
+ */
+export interface JjBookmark {
+	/** Bookmark name */
+	name: string;
+	/** Target change ID (short form) */
+	changeId: string;
+	/** Target commit ID (short form) */
+	commitId: string;
+	/** Commit description */
+	description: string;
+	/** Whether this bookmark is conflicted (has divergent targets) */
+	isConflicted: boolean;
+	/** Remote name if this is a remote bookmark */
+	remote?: string;
+	/** Whether this bookmark is tracked */
+	isTracked: boolean;
+}
+
+/**
+ * Represents a jj change (commit)
+ * Parsed from `jj log` output
+ */
+export interface JjChange {
+	/** Change ID (stable identifier, e.g., 'qzmzpxyl') */
+	changeId: string;
+	/** Commit ID (content-based hash, e.g., 'bc915fcd') */
+	commitId: string;
+	/** Commit description/message */
+	description: string;
+	/** Whether this change is empty (no file changes) */
+	isEmpty: boolean;
+	/** Author information */
+	author?: {
+		name: string;
+		email: string;
+		timestamp: string;
+	};
+	/** Bookmarks pointing to this change */
+	bookmarks: string[];
+}
+
+/**
+ * Represents a jj workspace
+ * Jujutsu supports multiple workspaces within a single repository
+ */
+export interface JjWorkspace {
+	/** Workspace name (default is 'default') */
+	name: string;
+	/** Path to the workspace root */
+	path: string;
+	/** Current working copy change ID in this workspace */
+	workingCopyChangeId: string;
+}

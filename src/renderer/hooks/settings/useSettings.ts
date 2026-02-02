@@ -14,6 +14,9 @@ import type {
 	KeyboardMasteryStats,
 	ThinkingMode,
 } from '../../types';
+
+// VCS mode type for Version Control System preference
+export type VcsMode = 'git' | 'jj' | 'auto';
 import { DEFAULT_CUSTOM_THEME_COLORS } from '../../constants/themes';
 import { DEFAULT_SHORTCUTS, TAB_SHORTCUTS, FIXED_SHORTCUTS } from '../../constants/shortcuts';
 import { getLevelIndex } from '../../constants/keyboardMastery';
@@ -350,6 +353,14 @@ export interface UseSettingsReturn {
 	// File tab auto-refresh settings
 	fileTabAutoRefreshEnabled: boolean;
 	setFileTabAutoRefreshEnabled: (value: boolean) => void;
+
+	// VCS (Version Control System) settings
+	vcsMode: VcsMode;
+	setVcsMode: (value: VcsMode) => void;
+	jjPath: string;
+	setJjPath: (value: string) => void;
+	jjInstalled: boolean;
+	checkJjInstallation: () => Promise<void>;
 }
 
 export function useSettings(): UseSettingsReturn {
@@ -507,6 +518,11 @@ export function useSettings(): UseSettingsReturn {
 
 	// File tab auto-refresh settings
 	const [fileTabAutoRefreshEnabled, setFileTabAutoRefreshEnabledState] = useState(false); // Default: disabled
+
+	// VCS (Version Control System) settings
+	const [vcsMode, setVcsModeState] = useState<VcsMode>('auto'); // Default: auto-detect
+	const [jjPath, setJjPathState] = useState(''); // Default: use system PATH
+	const [jjInstalled, setJjInstalledState] = useState(false); // Derived, not persisted
 
 	// Wrapper functions that persist to electron-store
 	// PERF: All wrapped in useCallback to prevent re-renders
@@ -1299,6 +1315,52 @@ export function useSettings(): UseSettingsReturn {
 		window.maestro.settings.set('disableConfetti', value);
 	}, []);
 
+	// VCS mode setter (git, jj, or auto)
+	const setVcsMode = useCallback((value: VcsMode) => {
+		setVcsModeState(value);
+		window.maestro.settings.set('vcsMode', value);
+	}, []);
+
+	// Custom jj binary path setter
+	const setJjPath = useCallback((value: string) => {
+		setJjPathState(value);
+		window.maestro.settings.set('jjPath', value);
+	}, []);
+
+	// Check if jj is installed and update the jjInstalled state
+	const checkJjInstallation = useCallback(async () => {
+		try {
+			const installed = await window.maestro.jj.isInstalled();
+			setJjInstalledState(installed);
+		} catch (error) {
+			console.error('[Settings] Failed to check jj installation:', error);
+			setJjInstalledState(false);
+		}
+	}, []);
+
+	// VCS mode setter (git, jj, or auto)
+	const setVcsMode = useCallback((value: VcsMode) => {
+		setVcsModeState(value);
+		window.maestro.settings.set('vcsMode', value);
+	}, []);
+
+	// Custom jj binary path setter
+	const setJjPath = useCallback((value: string) => {
+		setJjPathState(value);
+		window.maestro.settings.set('jjPath', value);
+	}, []);
+
+	// Check if jj is installed and update the jjInstalled state
+	const checkJjInstallation = useCallback(async () => {
+		try {
+			const installed = await window.maestro.jj.isInstalled();
+			setJjInstalledState(installed);
+		} catch (error) {
+			console.error('[Settings] Failed to check jj installation:', error);
+			setJjInstalledState(false);
+		}
+	}, []);
+
 	// SSH Remote file indexing settings
 	const setSshRemoteIgnorePatterns = useCallback((value: string[]) => {
 		setSshRemoteIgnorePatternsState(value);
@@ -1396,6 +1458,8 @@ export function useSettings(): UseSettingsReturn {
 				const savedSshRemoteHonorGitignore = allSettings['sshRemoteHonorGitignore'];
 				const savedAutomaticTabNamingEnabled = allSettings['automaticTabNamingEnabled'];
 				const savedFileTabAutoRefreshEnabled = allSettings['fileTabAutoRefreshEnabled'];
+				const savedVcsMode = allSettings['vcsMode'];
+				const savedJjPath = allSettings['jjPath'];
 
 				if (savedEnterToSendAI !== undefined) setEnterToSendAIState(savedEnterToSendAI as boolean);
 				if (savedEnterToSendTerminal !== undefined)
@@ -1760,6 +1824,17 @@ export function useSettings(): UseSettingsReturn {
 				if (savedFileTabAutoRefreshEnabled !== undefined) {
 					setFileTabAutoRefreshEnabledState(savedFileTabAutoRefreshEnabled as boolean);
 				}
+
+				// VCS settings
+				if (savedVcsMode !== undefined) {
+					const validVcsModes = ['git', 'jj', 'auto'];
+					if (validVcsModes.includes(savedVcsMode as string)) {
+						setVcsModeState(savedVcsMode as VcsMode);
+					}
+				}
+				if (savedJjPath !== undefined) {
+					setJjPathState(savedJjPath as string);
+				}
 			} catch (error) {
 				console.error('[Settings] Failed to load settings:', error);
 			} finally {
@@ -1938,6 +2013,13 @@ export function useSettings(): UseSettingsReturn {
 			setAutomaticTabNamingEnabled,
 			fileTabAutoRefreshEnabled,
 			setFileTabAutoRefreshEnabled,
+			// VCS settings
+			vcsMode,
+			setVcsMode,
+			jjPath,
+			setJjPath,
+			jjInstalled,
+			checkJjInstallation,
 		}),
 		[
 			// State values
@@ -2083,6 +2165,13 @@ export function useSettings(): UseSettingsReturn {
 			setAutomaticTabNamingEnabled,
 			fileTabAutoRefreshEnabled,
 			setFileTabAutoRefreshEnabled,
+			// VCS settings
+			vcsMode,
+			setVcsMode,
+			jjPath,
+			setJjPath,
+			jjInstalled,
+			checkJjInstallation,
 		]
 	);
 }

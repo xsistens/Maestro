@@ -44,6 +44,7 @@ import { createLeaderboardApi } from './leaderboard';
 import { createAttachmentsApi } from './attachments';
 import { createProcessApi } from './process';
 import { createGitApi } from './git';
+import { createJjApi } from './jj';
 import { createFsApi } from './fs';
 import { createAgentsApi } from './agents';
 import { createSymphonyApi } from './symphony';
@@ -75,6 +76,9 @@ contextBridge.exposeInMainWorld('maestro', {
 
 	// Git API
 	git: createGitApi(),
+
+	// Jujutsu (jj) VCS API
+	jj: createJjApi(),
 
 	// File System API
 	fs: createFsApi(),
@@ -241,6 +245,8 @@ export {
 	createProcessApi,
 	// Git
 	createGitApi,
+	// Jujutsu (jj)
+	createJjApi,
 	// Filesystem
 	createFsApi,
 	// Agents
@@ -402,6 +408,10 @@ export type {
 	GitLogEntry,
 	WorktreeDiscoveredData,
 } from './git';
+export type {
+	// From jj
+	JjApi,
+} from './jj';
 export type {
 	// From fs
 	FsApi,

@@ -338,6 +338,49 @@ interface MaestroAPI {
 			}
 		) => Promise<boolean>;
 	};
+	// Jujutsu (jj) API - version control operations for jj repositories
+	jj: {
+		isInstalled: () => Promise<boolean>;
+		getVersion: () => Promise<string>;
+		isRepo: (cwd: string) => Promise<boolean>;
+		getStatus: (cwd: string) => Promise<{
+			files: Array<{ path: string; status: 'A' | 'M' | 'D' | 'R' | 'C' }>;
+			workingCopyChangeId: string;
+			workingCopyCommitId: string;
+			workingCopyDescription: string;
+			workingCopyEmpty: boolean;
+			parentChangeId: string;
+			parentCommitId: string;
+			parentDescription: string;
+			parentEmpty: boolean;
+			hasConflicts: boolean;
+			conflictedFiles: string[];
+		}>;
+		getBranches: (cwd: string) => Promise<
+			Array<{
+				name: string;
+				changeId: string;
+				commitId: string;
+				description: string;
+				isConflicted: boolean;
+				remote?: string;
+				isTracked: boolean;
+			}>
+		>;
+		getCurrentChange: (cwd: string) => Promise<{
+			changeId: string;
+			commitId: string;
+			description: string;
+			isEmpty: boolean;
+			author?: {
+				name: string;
+				email: string;
+				timestamp: string;
+			};
+			bookmarks: string[];
+		} | null>;
+		getRepoRoot: (cwd: string) => Promise<string | null>;
+	};
 	// Git API - all methods accept optional sshRemoteId and remoteCwd for remote execution via SSH
 	git: {
 		status: (

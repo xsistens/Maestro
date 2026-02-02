@@ -10,6 +10,7 @@
 import { BrowserWindow, App } from 'electron';
 import Store from 'electron-store';
 import { registerGitHandlers, GitHandlerDependencies } from './git';
+import { registerJjHandlers } from './jj';
 import { registerAutorunHandlers } from './autorun';
 import { registerPlaybooksHandlers } from './playbooks';
 import { registerHistoryHandlers } from './history';
@@ -61,6 +62,7 @@ type TunnelManagerType = typeof tunnelManagerInstance;
 
 // Re-export individual handlers for selective registration
 export { registerGitHandlers };
+export { registerJjHandlers };
 export { registerAutorunHandlers };
 export { registerPlaybooksHandlers };
 export { registerHistoryHandlers };
@@ -165,6 +167,8 @@ export function registerAllHandlers(deps: HandlerDependencies): void {
 	registerGitHandlers({
 		settingsStore: deps.settingsStore,
 	});
+	// Register jj (Jujutsu) version control handlers
+	registerJjHandlers();
 	registerAutorunHandlers(deps);
 	registerPlaybooksHandlers(deps);
 	registerHistoryHandlers();
