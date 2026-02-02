@@ -10,3 +10,7 @@ export type { SshRemoteModalProps } from './SshRemoteModal';
 
 export { SshRemotesSection } from './SshRemotesSection';
 export type { SshRemotesSectionProps } from './SshRemotesSection';
+
+// VCS Settings
+export { VcsSettings } from './VcsSettings';
+export type { VcsSettingsProps } from './VcsSettings';

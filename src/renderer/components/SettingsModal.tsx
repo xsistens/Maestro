@@ -31,6 +31,7 @@ import {
 	Monitor,
 	PartyPopper,
 	Tag,
+	GitBranch,
 } from 'lucide-react';
 import { useSettings } from '../hooks';
 import type {
@@ -54,7 +55,6 @@ import { SettingCheckbox } from './SettingCheckbox';
 import { FontConfigurationPanel } from './FontConfigurationPanel';
 import { NotificationsPanel } from './NotificationsPanel';
 import { SshRemotesSection } from './Settings/SshRemotesSection';
-import { SshRemoteIgnoreSection } from './Settings/SshRemoteIgnoreSection';
 
 // Feature flags - set to true to enable dormant features
 const FEATURE_FLAGS = {
@@ -272,7 +272,7 @@ interface SettingsModalProps {
 	setCrashReportingEnabled: (value: boolean) => void;
 	customAICommands: CustomAICommand[];
 	setCustomAICommands: (commands: CustomAICommand[]) => void;
-	initialTab?: 'general' | 'display' | 'llm' | 'shortcuts' | 'theme' | 'notifications' | 'aicommands' | 'ssh';
+	initialTab?: 'general' | 'llm' | 'shortcuts' | 'theme' | 'notifications' | 'aicommands' | 'ssh';
 	hasNoAgents?: boolean;
 	onThemeImportError?: (message: string) => void;
 	onThemeImportSuccess?: (message: string) => void;
@@ -303,18 +303,10 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 		setDisableGpuAcceleration,
 		disableConfetti,
 		setDisableConfetti,
-		// SSH Remote file indexing settings
-		sshRemoteIgnorePatterns,
-		setSshRemoteIgnorePatterns,
-		sshRemoteHonorGitignore,
-		setSshRemoteHonorGitignore,
-		// Automatic tab naming settings
-		automaticTabNamingEnabled,
-		setAutomaticTabNamingEnabled,
 	} = useSettings();
 
 	const [activeTab, setActiveTab] = useState<
-		'general' | 'display' | 'llm' | 'shortcuts' | 'theme' | 'notifications' | 'aicommands' | 'ssh'
+		'general' | 'llm' | 'shortcuts' | 'theme' | 'notifications' | 'aicommands' | 'ssh'
 	>('general');
 	const [systemFonts, setSystemFonts] = useState<string[]>([]);
 	const [customFonts, setCustomFonts] = useState<string[]>([]);
@@ -468,10 +460,10 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 		const handleTabNavigation = (e: KeyboardEvent) => {
 			const tabs: Array<
-				'general' | 'display' | 'llm' | 'shortcuts' | 'theme' | 'notifications' | 'aicommands' | 'ssh'
+				'general' | 'llm' | 'shortcuts' | 'theme' | 'notifications' | 'aicommands' | 'ssh'
 			> = FEATURE_FLAGS.LLM_SETTINGS
-				? ['general', 'display', 'llm', 'shortcuts', 'theme', 'notifications', 'aicommands', 'ssh']
-				: ['general', 'display', 'shortcuts', 'theme', 'notifications', 'aicommands', 'ssh'];
+				? ['general', 'llm', 'shortcuts', 'theme', 'notifications', 'aicommands', 'ssh']
+				: ['general', 'shortcuts', 'theme', 'notifications', 'aicommands', 'ssh'];
 			const currentIndex = tabs.indexOf(activeTab);
 
 			if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === '[') {
@@ -931,6 +923,15 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 					>
 						<Cpu className="w-4 h-4" />
 						{activeTab === 'aicommands' && <span>AI Commands</span>}
+					</button>
+					<button
+						onClick={() => setActiveTab('vcs')}
+						className={`px-4 py-4 text-sm font-bold border-b-2 ${activeTab === 'vcs' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
+						tabIndex={-1}
+						title="Version Control"
+					>
+						<GitBranch className="w-4 h-4" />
+						{activeTab === 'vcs' && <span>VCS</span>}
 					</button>
 					<button
 						onClick={() => setActiveTab('ssh')}
@@ -2590,6 +2591,20 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 							{/* OpenSpec Commands Section */}
 							<OpenSpecCommandsPanel theme={theme} />
+						</div>
+					)}
+
+					{activeTab === 'vcs' && (
+						<div className="space-y-5">
+							<VcsSettings
+								theme={theme}
+								vcsMode={vcsMode}
+								setVcsMode={setVcsMode}
+								jjPath={jjPath}
+								setJjPath={setJjPath}
+								jjInstalled={jjInstalled}
+								checkJjInstallation={checkJjInstallation}
+							/>
 						</div>
 					)}
 
