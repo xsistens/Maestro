@@ -6,6 +6,7 @@
  * - Repository detection: isRepo, getRepoRoot
  * - Status queries: getStatus, getBranches, getCurrentChange
  * - Branch management: branchCreate, branchDelete, branchSet, branchTrack
+ * - Git interop: gitFetch, gitPush, gitClone
  */
 
 import { ipcRenderer } from 'electron';
@@ -106,6 +107,34 @@ export function createJjApi() {
 			bookmark: string
 		): Promise<JjOperationResult> =>
 			ipcRenderer.invoke('jj:branchTrack', cwd, bookmark),
+
+		/**
+		 * Fetch from git remote
+		 */
+		gitFetch: (
+			cwd: string,
+			options?: { remote?: string; branch?: string }
+		): Promise<JjOperationResult> =>
+			ipcRenderer.invoke('jj:gitFetch', cwd, options),
+
+		/**
+		 * Push to git remote
+		 */
+		gitPush: (
+			cwd: string,
+			options?: { remote?: string; branch?: string; allBranches?: boolean }
+		): Promise<JjOperationResult> =>
+			ipcRenderer.invoke('jj:gitPush', cwd, options),
+
+		/**
+		 * Clone a git repository into jj
+		 */
+		gitClone: (
+			cwd: string,
+			url: string,
+			destination?: string
+		): Promise<JjOperationResult> =>
+			ipcRenderer.invoke('jj:gitClone', cwd, url, destination),
 	};
 }
 

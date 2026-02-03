@@ -398,6 +398,19 @@ interface MaestroAPI {
 			cwd: string,
 			bookmark: string
 		) => Promise<{ ok: boolean; changeId?: string; message: string; error?: string }>;
+		gitFetch: (
+			cwd: string,
+			options?: { remote?: string; branch?: string }
+		) => Promise<{ ok: boolean; changeId?: string; message: string; error?: string }>;
+		gitPush: (
+			cwd: string,
+			options?: { remote?: string; branch?: string; allBranches?: boolean }
+		) => Promise<{ ok: boolean; changeId?: string; message: string; error?: string }>;
+		gitClone: (
+			cwd: string,
+			url: string,
+			destination?: string
+		) => Promise<{ ok: boolean; changeId?: string; message: string; error?: string }>;
 	};
 	// Git API - all methods accept optional sshRemoteId and remoteCwd for remote execution via SSH
 	git: {

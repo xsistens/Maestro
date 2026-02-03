@@ -193,4 +193,57 @@ export const jjService = {
 			defaultValue: { ok: false, message: '', error: 'IPC call failed' },
 		});
 	},
+
+	/**
+	 * Fetch from git remote
+	 * @param cwd Working directory path
+	 * @param options Optional remote and branch to fetch
+	 * @returns Promise<JjOperationResult> - operation result
+	 */
+	async gitFetch(
+		cwd: string,
+		options?: { remote?: string; branch?: string }
+	): Promise<JjOperationResult> {
+		return createIpcMethod({
+			call: () => window.maestro.jj.gitFetch(cwd, options),
+			errorContext: 'Jj gitFetch',
+			defaultValue: { ok: false, message: '', error: 'IPC call failed' },
+		});
+	},
+
+	/**
+	 * Push to git remote
+	 * @param cwd Working directory path
+	 * @param options Optional remote, branch, and allBranches flag
+	 * @returns Promise<JjOperationResult> - operation result
+	 */
+	async gitPush(
+		cwd: string,
+		options?: { remote?: string; branch?: string; allBranches?: boolean }
+	): Promise<JjOperationResult> {
+		return createIpcMethod({
+			call: () => window.maestro.jj.gitPush(cwd, options),
+			errorContext: 'Jj gitPush',
+			defaultValue: { ok: false, message: '', error: 'IPC call failed' },
+		});
+	},
+
+	/**
+	 * Clone a git repository into jj
+	 * @param cwd Working directory path (parent directory for clone)
+	 * @param url Git repository URL to clone
+	 * @param destination Optional target directory name
+	 * @returns Promise<JjOperationResult> - operation result
+	 */
+	async gitClone(
+		cwd: string,
+		url: string,
+		destination?: string
+	): Promise<JjOperationResult> {
+		return createIpcMethod({
+			call: () => window.maestro.jj.gitClone(cwd, url, destination),
+			errorContext: 'Jj gitClone',
+			defaultValue: { ok: false, message: '', error: 'IPC call failed' },
+		});
+	},
 };

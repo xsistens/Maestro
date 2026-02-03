@@ -60,7 +60,7 @@ describe('Jj IPC handlers', () => {
 	});
 
 	describe('registration', () => {
-		it('should register all 19 jj handlers', () => {
+		it('should register all 22 jj handlers', () => {
 			const expectedChannels = [
 				'jj:isInstalled',
 				'jj:getVersion',
@@ -83,9 +83,13 @@ describe('Jj IPC handlers', () => {
 				'jj:branchDelete',
 				'jj:branchSet',
 				'jj:branchTrack',
+				// Git interop handlers
+				'jj:gitFetch',
+				'jj:gitPush',
+				'jj:gitClone',
 			];
 
-			expect(handlers.size).toBe(19);
+			expect(handlers.size).toBe(22);
 			for (const channel of expectedChannels) {
 				expect(handlers.has(channel)).toBe(true);
 			}
@@ -769,6 +773,317 @@ describe('Jj IPC handlers', () => {
 
 			expect(result.ok).toBe(false);
 			expect(result.error).toContain("doesn't exist");
+		});
+	});
+
+	// ========================================================================
+	// jj:gitFetch handler tests
+	// ========================================================================
+	describe('jj:gitFetch', () => {
+		it('should fetch from default remote successfully', async () => {
+			vi.mocked(execFile.execFileNoThrow).mockResolvedValue({
+				stdout: '',
+				stderr: 'Fetching from origin',
+				exitCode: 0,
+			});
+
+			const handler = handlers.get('jj:gitFetch');
+			const result = await handler!({} as any, '/test/repo');
+
+			expect(execFile.execFileNoThrow).toHaveBeenCalledWith(
+				'jj',
+				['git', 'fetch'],
+				'/test/repo'
+			);
+			expect(result.ok).toBe(true);
+		});
+
+		it('should pass remote option when provided', async () => {
+			vi.mocked(execFile.execFileNoThrow).mockResolvedValue({
+				stdout: '',
+				stderr: 'Fetching from upstream',
+				exitCode: 0,
+			});
+
+			const handler = handlers.get('jj:gitFetch');
+			await handler!({} as any, '/test/repo', { remote: 'upstream' });
+
+			expect(execFile.execFileNoThrow).toHaveBeenCalledWith(
+				'jj',
+				['git', 'fetch', '--remote', 'upstream'],
+				'/test/repo'
+			);
+		});
+
+		it('should pass branch option when provided', async () => {
+			vi.mocked(execFile.execFileNoThrow).mockResolvedValue({
+				stdout: '',
+				stderr: '',
+				exitCode: 0,
+			});
+
+			const handler = handlers.get('jj:gitFetch');
+			await handler!({} as any, '/test/repo', { branch: 'main' });
+
+			expect(execFile.execFileNoThrow).toHaveBeenCalledWith(
+				'jj',
+				['git', 'fetch', '--branch', 'main'],
+				'/test/repo'
+			);
+		});
+
+		it('should pass both remote and branch options', async () => {
+			vi.mocked(execFile.execFileNoThrow).mockResolvedValue({
+				stdout: '',
+				stderr: '',
+				exitCode: 0,
+			});
+
+			const handler = handlers.get('jj:gitFetch');
+			await handler!({} as any, '/test/repo', {
+				remote: 'upstream',
+				branch: 'develop',
+			});
+
+			expect(execFile.execFileNoThrow).toHaveBeenCalledWith(
+				'jj',
+				['git', 'fetch', '--remote', 'upstream', '--branch', 'develop'],
+				'/test/repo'
+			);
+		});
+
+		it('should return error on authentication failure', async () => {
+			vi.mocked(execFile.execFileNoThrow).mockResolvedValue({
+				stdout: '',
+				stderr: 'Error: could not read Username for remote',
+				exitCode: 1,
+			});
+
+			const handler = handlers.get('jj:gitFetch');
+			const result = await handler!({} as any, '/test/repo');
+
+			expect(result.ok).toBe(false);
+			expect(result.error).toContain('could not read Username');
+		});
+
+		it('should return error when no git remote configured', async () => {
+			vi.mocked(execFile.execFileNoThrow).mockResolvedValue({
+				stdout: '',
+				stderr: 'Error: No git remote found',
+				exitCode: 1,
+			});
+
+			const handler = handlers.get('jj:gitFetch');
+			const result = await handler!({} as any, '/test/repo');
+
+			expect(result.ok).toBe(false);
+			expect(result.error).toContain('No git remote');
+		});
+	});
+
+	// ========================================================================
+	// jj:gitPush handler tests
+	// ========================================================================
+	describe('jj:gitPush', () => {
+		it('should push to default remote successfully', async () => {
+			vi.mocked(execFile.execFileNoThrow).mockResolvedValue({
+				stdout: '',
+				stderr: 'Pushing to origin',
+				exitCode: 0,
+			});
+
+			const handler = handlers.get('jj:gitPush');
+			const result = await handler!({} as any, '/test/repo');
+
+			expect(execFile.execFileNoThrow).toHaveBeenCalledWith(
+				'jj',
+				['git', 'push'],
+				'/test/repo'
+			);
+			expect(result.ok).toBe(true);
+		});
+
+		it('should pass remote option when provided', async () => {
+			vi.mocked(execFile.execFileNoThrow).mockResolvedValue({
+				stdout: '',
+				stderr: '',
+				exitCode: 0,
+			});
+
+			const handler = handlers.get('jj:gitPush');
+			await handler!({} as any, '/test/repo', { remote: 'upstream' });
+
+			expect(execFile.execFileNoThrow).toHaveBeenCalledWith(
+				'jj',
+				['git', 'push', '--remote', 'upstream'],
+				'/test/repo'
+			);
+		});
+
+		it('should pass branch option when provided', async () => {
+			vi.mocked(execFile.execFileNoThrow).mockResolvedValue({
+				stdout: '',
+				stderr: '',
+				exitCode: 0,
+			});
+
+			const handler = handlers.get('jj:gitPush');
+			await handler!({} as any, '/test/repo', { branch: 'main' });
+
+			expect(execFile.execFileNoThrow).toHaveBeenCalledWith(
+				'jj',
+				['git', 'push', '--branch', 'main'],
+				'/test/repo'
+			);
+		});
+
+		it('should pass --all flag when allBranches is true', async () => {
+			vi.mocked(execFile.execFileNoThrow).mockResolvedValue({
+				stdout: '',
+				stderr: '',
+				exitCode: 0,
+			});
+
+			const handler = handlers.get('jj:gitPush');
+			await handler!({} as any, '/test/repo', { allBranches: true });
+
+			expect(execFile.execFileNoThrow).toHaveBeenCalledWith(
+				'jj',
+				['git', 'push', '--all'],
+				'/test/repo'
+			);
+		});
+
+		it('should return error on push rejection', async () => {
+			vi.mocked(execFile.execFileNoThrow).mockResolvedValue({
+				stdout: '',
+				stderr: 'Error: failed to push some refs',
+				exitCode: 1,
+			});
+
+			const handler = handlers.get('jj:gitPush');
+			const result = await handler!({} as any, '/test/repo');
+
+			expect(result.ok).toBe(false);
+			expect(result.error).toContain('failed to push');
+		});
+
+		it('should return error on authentication failure', async () => {
+			vi.mocked(execFile.execFileNoThrow).mockResolvedValue({
+				stdout: '',
+				stderr: 'Error: Permission denied (publickey)',
+				exitCode: 1,
+			});
+
+			const handler = handlers.get('jj:gitPush');
+			const result = await handler!({} as any, '/test/repo');
+
+			expect(result.ok).toBe(false);
+			expect(result.error).toContain('Permission denied');
+		});
+	});
+
+	// ========================================================================
+	// jj:gitClone handler tests
+	// ========================================================================
+	describe('jj:gitClone', () => {
+		it('should clone repository successfully', async () => {
+			vi.mocked(execFile.execFileNoThrow).mockResolvedValue({
+				stdout: '',
+				stderr: 'Fetching into new repo in "/test/target/my-repo"',
+				exitCode: 0,
+			});
+
+			const handler = handlers.get('jj:gitClone');
+			const result = await handler!(
+				{} as any,
+				'/test/target',
+				'https://github.com/user/repo.git'
+			);
+
+			expect(execFile.execFileNoThrow).toHaveBeenCalledWith(
+				'jj',
+				['git', 'clone', 'https://github.com/user/repo.git'],
+				'/test/target'
+			);
+			expect(result.ok).toBe(true);
+		});
+
+		it('should pass destination when provided', async () => {
+			vi.mocked(execFile.execFileNoThrow).mockResolvedValue({
+				stdout: '',
+				stderr: 'Fetching into new repo in "/test/target/custom-dir"',
+				exitCode: 0,
+			});
+
+			const handler = handlers.get('jj:gitClone');
+			await handler!(
+				{} as any,
+				'/test/target',
+				'https://github.com/user/repo.git',
+				'custom-dir'
+			);
+
+			expect(execFile.execFileNoThrow).toHaveBeenCalledWith(
+				'jj',
+				['git', 'clone', 'https://github.com/user/repo.git', 'custom-dir'],
+				'/test/target'
+			);
+		});
+
+		it('should return error for invalid URL', async () => {
+			vi.mocked(execFile.execFileNoThrow).mockResolvedValue({
+				stdout: '',
+				stderr: 'Error: could not find repository',
+				exitCode: 1,
+			});
+
+			const handler = handlers.get('jj:gitClone');
+			const result = await handler!(
+				{} as any,
+				'/test/target',
+				'https://invalid-url.example/nonexistent.git'
+			);
+
+			expect(result.ok).toBe(false);
+			expect(result.error).toContain('could not find repository');
+		});
+
+		it('should return error when destination already exists', async () => {
+			vi.mocked(execFile.execFileNoThrow).mockResolvedValue({
+				stdout: '',
+				stderr: 'Error: destination path already exists',
+				exitCode: 1,
+			});
+
+			const handler = handlers.get('jj:gitClone');
+			const result = await handler!(
+				{} as any,
+				'/test/target',
+				'https://github.com/user/repo.git',
+				'existing-dir'
+			);
+
+			expect(result.ok).toBe(false);
+			expect(result.error).toContain('already exists');
+		});
+
+		it('should return error on authentication failure', async () => {
+			vi.mocked(execFile.execFileNoThrow).mockResolvedValue({
+				stdout: '',
+				stderr: 'Error: Authentication failed for repository',
+				exitCode: 1,
+			});
+
+			const handler = handlers.get('jj:gitClone');
+			const result = await handler!(
+				{} as any,
+				'/test/target',
+				'https://github.com/private/repo.git'
+			);
+
+			expect(result.ok).toBe(false);
+			expect(result.error).toContain('Authentication failed');
 		});
 	});
 });

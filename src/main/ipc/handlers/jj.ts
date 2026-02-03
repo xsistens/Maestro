@@ -468,5 +468,97 @@ export function registerJjHandlers(): void {
 		)
 	);
 
+	// ========================================================================
+	// Git Interop (fetch, push, clone)
+	// ========================================================================
+
+	// Fetch from git remote
+	ipcMain.handle(
+		'jj:gitFetch',
+		withIpcErrorLogging(
+			handlerOpts('gitFetch'),
+			async (
+				cwd: string,
+				options?: { remote?: string; branch?: string }
+			): Promise<JjOperationResult> => {
+				const args = ['git', 'fetch'];
+				if (options?.remote) {
+					args.push('--remote', options.remote);
+				}
+				if (options?.branch) {
+					args.push('--branch', options.branch);
+				}
+				const result = await execFileNoThrow('jj', args, cwd);
+				if (result.exitCode !== 0) {
+					return {
+						ok: false,
+						message: result.stdout,
+						error: result.stderr || 'jj git fetch failed',
+					};
+				}
+				return { ok: true, message: result.stderr || result.stdout };
+			}
+		)
+	);
+
+	// Push to git remote
+	ipcMain.handle(
+		'jj:gitPush',
+		withIpcErrorLogging(
+			handlerOpts('gitPush'),
+			async (
+				cwd: string,
+				options?: { remote?: string; branch?: string; allBranches?: boolean }
+			): Promise<JjOperationResult> => {
+				const args = ['git', 'push'];
+				if (options?.remote) {
+					args.push('--remote', options.remote);
+				}
+				if (options?.branch) {
+					args.push('--branch', options.branch);
+				}
+				if (options?.allBranches) {
+					args.push('--all');
+				}
+				const result = await execFileNoThrow('jj', args, cwd);
+				if (result.exitCode !== 0) {
+					return {
+						ok: false,
+						message: result.stdout,
+						error: result.stderr || 'jj git push failed',
+					};
+				}
+				return { ok: true, message: result.stderr || result.stdout };
+			}
+		)
+	);
+
+	// Clone a git repository into jj
+	ipcMain.handle(
+		'jj:gitClone',
+		withIpcErrorLogging(
+			handlerOpts('gitClone'),
+			async (
+				cwd: string,
+				url: string,
+				destination?: string
+			): Promise<JjOperationResult> => {
+				const args = ['git', 'clone', url];
+				if (destination) {
+					args.push(destination);
+				}
+				const result = await execFileNoThrow('jj', args, cwd);
+				if (result.exitCode !== 0) {
+					return {
+						ok: false,
+						message: result.stdout,
+						error: result.stderr || 'jj git clone failed',
+					};
+				}
+				return { ok: true, message: result.stderr || result.stdout };
+			}
+		)
+	);
+
 	logger.debug(`${LOG_CONTEXT} Jj IPC handlers registered`);
 }
