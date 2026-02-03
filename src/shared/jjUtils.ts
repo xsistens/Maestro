@@ -11,7 +11,15 @@
  * This module focuses on parsing and utility functions that can be shared.
  */
 
-import type { JjStatus, JjFileStatusType, JjBookmark, JjChange } from './types';
+import type {
+	JjStatus,
+	JjFileStatusType,
+	JjBookmark,
+	JjChange,
+	JjLogEntry,
+	JjDiffFile,
+	JjDiffResult,
+} from './types';
 
 /**
  * Parse jj version output to extract version information
@@ -402,4 +410,115 @@ export function getJjChangedFiles(status: JjStatus): string[] {
  */
 export function getJjFilesByStatus(status: JjStatus, statusType: JjFileStatusType): string[] {
 	return status.files.filter((f) => f.status === statusType).map((f) => f.path);
+}
+
+/**
+ * The jj log template used for structured output.
+ * Produces one line per change in the format:
+ * changeId<SEP>commitId<SEP>description<SEP>isEmpty<SEP>author<SEP>email<SEP>timestamp<SEP>bookmarks
+ *
+ * Using \x1f (ASCII Unit Separator) as field delimiter to avoid conflicts with
+ * descriptions that may contain spaces, quotes, or other characters.
+ */
+export const JJ_LOG_TEMPLATE =
+	'change_id ++ "\\x1f" ++ commit_id ++ "\\x1f" ++ description ++ "\\x1f" ++ empty ++ "\\x1f" ++ author.name() ++ "\\x1f" ++ author.email() ++ "\\x1f" ++ author.timestamp() ++ "\\x1f" ++ bookmarks ++ "\\n"';
+
+/**
+ * Parse jj log output produced with JJ_LOG_TEMPLATE into structured entries.
+ *
+ * @param stdout - Raw stdout from `jj log --no-graph -T JJ_LOG_TEMPLATE`
+ * @returns Array of parsed log entries
+ */
+export function parseJjLog(stdout: string): JjLogEntry[] {
+	if (!stdout || !stdout.trim()) {
+		return [];
+	}
+
+	const entries: JjLogEntry[] = [];
+	const lines = stdout.trim().split('\n');
+
+	for (const line of lines) {
+		if (!line.trim()) continue;
+
+		const parts = line.split('\x1f');
+		if (parts.length < 4) continue;
+
+		const changeId = parts[0].trim();
+		const commitId = parts[1].trim();
+		const description = parts[2].trim();
+		const isEmpty = parts[3].trim() === 'true';
+		const author = parts[4]?.trim() || '';
+		const email = parts[5]?.trim() || '';
+		const timestamp = parts[6]?.trim() || '';
+		const bookmarksRaw = parts[7]?.trim() || '';
+
+		const bookmarks = bookmarksRaw
+			? bookmarksRaw.split(/\s+/).filter((b) => b.length > 0)
+			: [];
+
+		entries.push({
+			changeId,
+			commitId,
+			description,
+			isEmpty,
+			author,
+			email,
+			timestamp,
+			bookmarks,
+		});
+	}
+
+	return entries;
+}
+
+/**
+ * Parse a unified diff output from `jj diff` into structured result.
+ *
+ * Extracts file-level change summaries from diff headers (--- / +++ lines)
+ * while preserving the raw diff text.
+ *
+ * @param stdout - Raw stdout from `jj diff`
+ * @returns Structured diff result with file summaries
+ */
+export function parseJjDiff(stdout: string): JjDiffResult {
+	if (!stdout || !stdout.trim()) {
+		return { raw: '', files: [] };
+	}
+
+	const files: JjDiffFile[] = [];
+	const lines = stdout.split('\n');
+
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i];
+
+		// Look for diff headers: "diff --git a/path b/path" or "=== path ==="
+		const gitDiffMatch = line.match(/^diff --git a\/(.+) b\/(.+)$/);
+		if (gitDiffMatch) {
+			const oldPath = gitDiffMatch[1];
+			const newPath = gitDiffMatch[2];
+
+			// Determine status by looking at subsequent --- / +++ lines
+			let status: JjFileStatusType = 'M';
+			for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
+				if (lines[j].startsWith('--- /dev/null')) {
+					status = 'A';
+					break;
+				}
+				if (lines[j].startsWith('+++ /dev/null')) {
+					status = 'D';
+					break;
+				}
+				if (lines[j].startsWith('diff ')) break;
+			}
+
+			// Use the new path (for renames, it's the destination)
+			if (oldPath !== newPath) {
+				status = 'R';
+			}
+
+			files.push({ path: newPath, status });
+		}
+	}
+
+	return { raw: stdout, files };
 }

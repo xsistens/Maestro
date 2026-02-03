@@ -495,3 +495,73 @@ export interface JjWorkspace {
 	/** Current working copy change ID in this workspace */
 	workingCopyChangeId: string;
 }
+
+/**
+ * Result of a jj diff operation
+ * Contains the raw unified diff output and parsed file-level summaries
+ */
+export interface JjDiffResult {
+	/** Raw unified diff output */
+	raw: string;
+	/** Files changed in the diff */
+	files: JjDiffFile[];
+}
+
+/**
+ * A single file entry in a jj diff result
+ */
+export interface JjDiffFile {
+	/** File path */
+	path: string;
+	/** Type of change */
+	status: JjFileStatusType;
+}
+
+/**
+ * Result of a jj log operation
+ * Contains an ordered list of changes/commits
+ */
+export interface JjLogEntry {
+	/** Change ID (stable identifier) */
+	changeId: string;
+	/** Commit ID (content-based hash) */
+	commitId: string;
+	/** Change description/message */
+	description: string;
+	/** Whether this change is empty (no file changes) */
+	isEmpty: boolean;
+	/** Author name */
+	author: string;
+	/** Author email */
+	email: string;
+	/** Timestamp string */
+	timestamp: string;
+	/** Bookmarks pointing to this change */
+	bookmarks: string[];
+}
+
+/**
+ * Result of a jj show operation
+ * Contains change details and the associated diff
+ */
+export interface JjShowResult {
+	/** Change metadata */
+	change: JjLogEntry;
+	/** Diff content for this change */
+	diff: string;
+}
+
+/**
+ * Result of a jj mutation operation (describe, new, squash, abandon, edit)
+ * Contains success status and relevant IDs
+ */
+export interface JjOperationResult {
+	/** Whether the operation succeeded */
+	ok: boolean;
+	/** New or affected change ID, if applicable */
+	changeId?: string;
+	/** Raw stdout from the command */
+	message: string;
+	/** Error message if operation failed */
+	error?: string;
+}

@@ -15,6 +15,8 @@ import {
 	getJjStatusDescription,
 	getJjChangedFiles,
 	getJjFilesByStatus,
+	parseJjLog,
+	parseJjDiff,
 } from '../../shared/jjUtils';
 
 describe('jjUtils', () => {
@@ -386,6 +388,159 @@ Parent commit: zzzzzzzz 00000000 (empty) (no description set)`;
 			expect(getJjFilesByStatus(status, 'M')).toEqual(['modified.ts']);
 			expect(getJjFilesByStatus(status, 'D')).toEqual(['deleted.ts']);
 			expect(getJjFilesByStatus(status, 'R')).toEqual([]);
+		});
+	});
+
+	describe('parseJjLog', () => {
+		it('returns empty array for empty output', () => {
+			expect(parseJjLog('')).toEqual([]);
+			expect(parseJjLog('   ')).toEqual([]);
+		});
+
+		it('returns empty array for null/undefined input', () => {
+			expect(parseJjLog(null as unknown as string)).toEqual([]);
+			expect(parseJjLog(undefined as unknown as string)).toEqual([]);
+		});
+
+		it('parses single log entry', () => {
+			const output = 'abc123\x1fdef456\x1fMy change\x1ffalse\x1fJohn\x1fjohn@test.com\x1f2024-01-01\x1fmain\n';
+			const result = parseJjLog(output);
+			expect(result).toHaveLength(1);
+			expect(result[0]).toEqual({
+				changeId: 'abc123',
+				commitId: 'def456',
+				description: 'My change',
+				isEmpty: false,
+				author: 'John',
+				email: 'john@test.com',
+				timestamp: '2024-01-01',
+				bookmarks: ['main'],
+			});
+		});
+
+		it('parses multiple log entries', () => {
+			const output = [
+				'abc123\x1fdef456\x1fFirst change\x1ffalse\x1fJohn\x1fjohn@test.com\x1f2024-01-01\x1fmain',
+				'ghi789\x1fjkl012\x1fSecond change\x1ffalse\x1fJane\x1fjane@test.com\x1f2024-01-02\x1f',
+			].join('\n');
+
+			const result = parseJjLog(output);
+			expect(result).toHaveLength(2);
+			expect(result[0].changeId).toBe('abc123');
+			expect(result[1].changeId).toBe('ghi789');
+		});
+
+		it('parses empty changes correctly', () => {
+			const output = 'abc123\x1fdef456\x1f\x1ftrue\x1fJohn\x1fjohn@test.com\x1f2024-01-01\x1f\n';
+			const result = parseJjLog(output);
+			expect(result).toHaveLength(1);
+			expect(result[0].isEmpty).toBe(true);
+			expect(result[0].description).toBe('');
+			expect(result[0].bookmarks).toEqual([]);
+		});
+
+		it('parses multiple bookmarks', () => {
+			const output = 'abc123\x1fdef456\x1fChange\x1ffalse\x1fJohn\x1fjohn@test.com\x1f2024-01-01\x1fmain develop\n';
+			const result = parseJjLog(output);
+			expect(result[0].bookmarks).toEqual(['main', 'develop']);
+		});
+
+		it('skips lines with insufficient fields', () => {
+			const output = 'abc\x1fdef\x1f\n\nbad line\nabc123\x1fdef456\x1fChange\x1ffalse\x1fJohn\x1fjohn@test.com\x1f2024-01-01\x1f\n';
+			const result = parseJjLog(output);
+			// Should parse the entries that have at least 4 fields
+			expect(result.length).toBeGreaterThanOrEqual(1);
+		});
+	});
+
+	describe('parseJjDiff', () => {
+		it('returns empty result for empty output', () => {
+			expect(parseJjDiff('')).toEqual({ raw: '', files: [] });
+			expect(parseJjDiff('   ')).toEqual({ raw: '', files: [] });
+		});
+
+		it('returns empty result for null/undefined input', () => {
+			expect(parseJjDiff(null as unknown as string)).toEqual({ raw: '', files: [] });
+			expect(parseJjDiff(undefined as unknown as string)).toEqual({ raw: '', files: [] });
+		});
+
+		it('parses modified file in diff', () => {
+			const output = `diff --git a/file.txt b/file.txt
+--- a/file.txt
++++ b/file.txt
+@@ -1 +1 @@
+-old
++new`;
+
+			const result = parseJjDiff(output);
+			expect(result.raw).toBe(output);
+			expect(result.files).toHaveLength(1);
+			expect(result.files[0]).toEqual({ path: 'file.txt', status: 'M' });
+		});
+
+		it('parses added file in diff', () => {
+			const output = `diff --git a/new.txt b/new.txt
+--- /dev/null
++++ b/new.txt
+@@ -0,0 +1 @@
++content`;
+
+			const result = parseJjDiff(output);
+			expect(result.files).toHaveLength(1);
+			expect(result.files[0]).toEqual({ path: 'new.txt', status: 'A' });
+		});
+
+		it('parses deleted file in diff', () => {
+			const output = `diff --git a/old.txt b/old.txt
+--- a/old.txt
++++ /dev/null
+@@ -1 +0,0 @@
+-content`;
+
+			const result = parseJjDiff(output);
+			expect(result.files).toHaveLength(1);
+			expect(result.files[0]).toEqual({ path: 'old.txt', status: 'D' });
+		});
+
+		it('parses renamed file in diff', () => {
+			const output = `diff --git a/old-name.txt b/new-name.txt
+--- a/old-name.txt
++++ b/new-name.txt`;
+
+			const result = parseJjDiff(output);
+			expect(result.files).toHaveLength(1);
+			expect(result.files[0]).toEqual({ path: 'new-name.txt', status: 'R' });
+		});
+
+		it('parses multiple files in diff', () => {
+			const output = `diff --git a/file1.txt b/file1.txt
+--- a/file1.txt
++++ b/file1.txt
+@@ -1 +1 @@
+-old
++new
+diff --git a/file2.txt b/file2.txt
+--- /dev/null
++++ b/file2.txt
+@@ -0,0 +1 @@
++added
+diff --git a/file3.txt b/file3.txt
+--- a/file3.txt
++++ /dev/null
+@@ -1 +0,0 @@
+-deleted`;
+
+			const result = parseJjDiff(output);
+			expect(result.files).toHaveLength(3);
+			expect(result.files[0]).toEqual({ path: 'file1.txt', status: 'M' });
+			expect(result.files[1]).toEqual({ path: 'file2.txt', status: 'A' });
+			expect(result.files[2]).toEqual({ path: 'file3.txt', status: 'D' });
+		});
+
+		it('preserves raw diff output', () => {
+			const output = 'diff --git a/f.txt b/f.txt\n--- a/f.txt\n+++ b/f.txt\n@@ -1 +1 @@\n-a\n+b';
+			const result = parseJjDiff(output);
+			expect(result.raw).toBe(output);
 		});
 	});
 });

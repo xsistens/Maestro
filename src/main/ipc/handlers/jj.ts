@@ -13,8 +13,19 @@ import {
 	parseJjStatus,
 	parseJjBookmarks,
 	parseJjChange,
+	parseJjLog,
+	parseJjDiff,
+	JJ_LOG_TEMPLATE,
 } from '../../../shared/jjUtils';
-import type { JjStatus, JjBookmark, JjChange } from '../../../shared/types';
+import type {
+	JjStatus,
+	JjBookmark,
+	JjChange,
+	JjLogEntry,
+	JjDiffResult,
+	JjShowResult,
+	JjOperationResult,
+} from '../../../shared/types';
 
 const LOG_CONTEXT = '[Jj]';
 
@@ -143,6 +154,211 @@ export function registerJjHandlers(): void {
 			}
 			return { root: result.stdout.trim() };
 		})
+	);
+
+	// ========================================================================
+	// Operational Commands (diff, show, log, describe, new, squash, abandon, edit)
+	// ========================================================================
+
+	// Get diff for current changes
+	ipcMain.handle(
+		'jj:diff',
+		withIpcErrorLogging(
+			handlerOpts('diff'),
+			async (cwd: string, revision?: string): Promise<JjDiffResult> => {
+				const args = ['diff'];
+				if (revision) {
+					args.push('-r', revision);
+				}
+				const result = await execFileNoThrow('jj', args, cwd);
+				if (result.exitCode !== 0) {
+					logger.warn(`jj diff failed in ${cwd}: ${result.stderr}`, LOG_CONTEXT);
+					return { raw: '', files: [] };
+				}
+				return parseJjDiff(result.stdout);
+			}
+		)
+	);
+
+	// Show specific change details (metadata + diff)
+	ipcMain.handle(
+		'jj:show',
+		withIpcErrorLogging(
+			handlerOpts('show'),
+			async (cwd: string, changeId?: string): Promise<JjShowResult | null> => {
+				const rev = changeId || '@';
+
+				// Get change metadata via log template
+				const logResult = await execFileNoThrow(
+					'jj',
+					['log', '--no-graph', '-r', rev, '-T', JJ_LOG_TEMPLATE],
+					cwd
+				);
+				if (logResult.exitCode !== 0) {
+					logger.warn(`jj log for show failed in ${cwd}: ${logResult.stderr}`, LOG_CONTEXT);
+					return null;
+				}
+
+				const entries = parseJjLog(logResult.stdout);
+				if (entries.length === 0) {
+					return null;
+				}
+
+				// Get the diff for this specific change
+				const diffResult = await execFileNoThrow('jj', ['diff', '-r', rev], cwd);
+				const diff = diffResult.exitCode === 0 ? diffResult.stdout : '';
+
+				return {
+					change: entries[0],
+					diff,
+				};
+			}
+		)
+	);
+
+	// Get commit/change history log
+	ipcMain.handle(
+		'jj:log',
+		withIpcErrorLogging(
+			handlerOpts('log'),
+			async (
+				cwd: string,
+				options?: { revset?: string; limit?: number }
+			): Promise<{ entries: JjLogEntry[] }> => {
+				const args = ['log', '--no-graph', '-T', JJ_LOG_TEMPLATE];
+				if (options?.revset) {
+					args.push('-r', options.revset);
+				}
+				if (options?.limit) {
+					args.push('-n', String(options.limit));
+				}
+				const result = await execFileNoThrow('jj', args, cwd);
+				if (result.exitCode !== 0) {
+					logger.warn(`jj log failed in ${cwd}: ${result.stderr}`, LOG_CONTEXT);
+					return { entries: [] };
+				}
+				return { entries: parseJjLog(result.stdout) };
+			}
+		)
+	);
+
+	// Set change description
+	ipcMain.handle(
+		'jj:describe',
+		withIpcErrorLogging(
+			handlerOpts('describe'),
+			async (
+				cwd: string,
+				message: string,
+				changeId?: string
+			): Promise<JjOperationResult> => {
+				const args = ['describe', '-m', message];
+				if (changeId) {
+					args.push('-r', changeId);
+				}
+				const result = await execFileNoThrow('jj', args, cwd);
+				if (result.exitCode !== 0) {
+					return {
+						ok: false,
+						message: result.stdout,
+						error: result.stderr || 'jj describe failed',
+					};
+				}
+				return { ok: true, message: result.stdout };
+			}
+		)
+	);
+
+	// Create new change
+	ipcMain.handle(
+		'jj:new',
+		withIpcErrorLogging(
+			handlerOpts('new'),
+			async (cwd: string, revision?: string): Promise<JjOperationResult> => {
+				const args = ['new'];
+				if (revision) {
+					args.push(revision);
+				}
+				const result = await execFileNoThrow('jj', args, cwd);
+				if (result.exitCode !== 0) {
+					return {
+						ok: false,
+						message: result.stdout,
+						error: result.stderr || 'jj new failed',
+					};
+				}
+				// Extract new change ID from output if available
+				const changeIdMatch = result.stderr.match(
+					/Working copy now at:\s+(\w+)/
+				);
+				return {
+					ok: true,
+					changeId: changeIdMatch?.[1],
+					message: result.stderr || result.stdout,
+				};
+			}
+		)
+	);
+
+	// Squash changes into parent
+	ipcMain.handle(
+		'jj:squash',
+		withIpcErrorLogging(
+			handlerOpts('squash'),
+			async (cwd: string, revision?: string): Promise<JjOperationResult> => {
+				const args = ['squash'];
+				if (revision) {
+					args.push('-r', revision);
+				}
+				const result = await execFileNoThrow('jj', args, cwd);
+				if (result.exitCode !== 0) {
+					return {
+						ok: false,
+						message: result.stdout,
+						error: result.stderr || 'jj squash failed',
+					};
+				}
+				return { ok: true, message: result.stderr || result.stdout };
+			}
+		)
+	);
+
+	// Abandon a change
+	ipcMain.handle(
+		'jj:abandon',
+		withIpcErrorLogging(
+			handlerOpts('abandon'),
+			async (cwd: string, changeId: string): Promise<JjOperationResult> => {
+				const result = await execFileNoThrow('jj', ['abandon', changeId], cwd);
+				if (result.exitCode !== 0) {
+					return {
+						ok: false,
+						message: result.stdout,
+						error: result.stderr || 'jj abandon failed',
+					};
+				}
+				return { ok: true, message: result.stderr || result.stdout };
+			}
+		)
+	);
+
+	// Edit an existing change (set it as the working copy)
+	ipcMain.handle(
+		'jj:edit',
+		withIpcErrorLogging(
+			handlerOpts('edit'),
+			async (cwd: string, changeId: string): Promise<JjOperationResult> => {
+				const result = await execFileNoThrow('jj', ['edit', changeId], cwd);
+				if (result.exitCode !== 0) {
+					return {
+						ok: false,
+						message: result.stdout,
+						error: result.stderr || 'jj edit failed',
+					};
+				}
+				return { ok: true, message: result.stderr || result.stdout };
+			}
+		)
 	);
 
 	logger.debug(`${LOG_CONTEXT} Jj IPC handlers registered`);
