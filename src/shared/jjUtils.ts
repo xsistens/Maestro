@@ -19,6 +19,9 @@ import type {
 	JjLogEntry,
 	JjDiffFile,
 	JjDiffResult,
+	JjChangeDetail,
+	JjDiff,
+	JjFileDiff,
 } from './types';
 
 /**
@@ -521,4 +524,244 @@ export function parseJjDiff(stdout: string): JjDiffResult {
 	}
 
 	return { raw: stdout, files };
+}
+
+/**
+ * Parse `jj show` output into structured change details.
+ *
+ * `jj show` output typically contains change metadata followed by a diff.
+ * The metadata section includes lines like:
+ * ```
+ * Change ID: qzmzpxylbc915fcd
+ * Commit ID: bc915fcd12345678
+ * Author: John Doe <john@example.com> (2024-01-15 10:30:00)
+ * Committer: John Doe <john@example.com> (2024-01-15 10:30:00)
+ * Description: My change description
+ *
+ * diff --git a/file.txt b/file.txt
+ * ...
+ * ```
+ *
+ * @param stdout - Raw stdout from `jj show`
+ * @returns Parsed change detail, or null if output is empty/unparseable
+ */
+export function parseJjShow(stdout: string): JjChangeDetail | null {
+	if (!stdout || !stdout.trim()) {
+		return null;
+	}
+
+	const lines = stdout.split('\n');
+	let changeId = '';
+	let commitId = '';
+	let description = '';
+	let author = '';
+	let email = '';
+	let timestamp = '';
+	let isEmpty = true;
+	const bookmarks: string[] = [];
+	let diffStartIndex = -1;
+
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i];
+
+		// Detect the start of the diff section
+		if (line.startsWith('diff --git ')) {
+			diffStartIndex = i;
+			break;
+		}
+
+		// Parse Change ID (full hex or short form)
+		const changeIdMatch = line.match(/^Change\s+ID:\s*(\S+)/i);
+		if (changeIdMatch) {
+			changeId = changeIdMatch[1];
+			continue;
+		}
+
+		// Parse Commit ID
+		const commitIdMatch = line.match(/^Commit\s+ID:\s*(\S+)/i);
+		if (commitIdMatch) {
+			commitId = commitIdMatch[1];
+			continue;
+		}
+
+		// Parse Author line: "Author: Name <email> (timestamp)"
+		const authorMatch = line.match(/^Author:\s*(.+?)\s*<([^>]*)>\s*\(([^)]*)\)/i);
+		if (authorMatch) {
+			author = authorMatch[1].trim();
+			email = authorMatch[2].trim();
+			timestamp = authorMatch[3].trim();
+			continue;
+		}
+
+		// Parse Author without email: "Author: Name (timestamp)"
+		const authorNoEmailMatch = line.match(/^Author:\s*(.+?)\s*\(([^)]*)\)/i);
+		if (!authorMatch && authorNoEmailMatch) {
+			author = authorNoEmailMatch[1].trim();
+			timestamp = authorNoEmailMatch[2].trim();
+			continue;
+		}
+
+		// Parse Bookmarks line
+		const bookmarksMatch = line.match(/^Bookmarks?:\s*(.+)/i);
+		if (bookmarksMatch) {
+			const bms = bookmarksMatch[1].trim().split(/\s+/).filter((b) => b.length > 0);
+			bookmarks.push(...bms);
+			continue;
+		}
+
+		// Parse Description (may be multi-line, but typically single)
+		const descMatch = line.match(/^Description:\s*(.*)/i);
+		if (descMatch) {
+			description = descMatch[1].trim();
+			// Collect continuation lines (indented or non-header lines)
+			for (let j = i + 1; j < lines.length; j++) {
+				const nextLine = lines[j];
+				if (nextLine.startsWith('diff --git ')) {
+					diffStartIndex = j;
+					break;
+				}
+				// Stop on empty line followed by diff or on another header
+				if (
+					nextLine.match(/^(Change|Commit|Author|Committer|Bookmarks?)\s+/i) ||
+					nextLine.startsWith('diff ')
+				) {
+					break;
+				}
+				if (nextLine.trim()) {
+					description += '\n' + nextLine.trim();
+				}
+			}
+			continue;
+		}
+	}
+
+	// If we couldn't parse any IDs, the output format wasn't recognized
+	if (!changeId && !commitId) {
+		return null;
+	}
+
+	// Extract the diff portion
+	const diffText = diffStartIndex >= 0 ? lines.slice(diffStartIndex).join('\n') : '';
+
+	// Parse the diff for file details
+	const diff = diffText ? parseJjDiff(diffText) : { raw: '', files: [] };
+
+	isEmpty = diff.files.length === 0 && (!description || description === '(no description set)');
+
+	return {
+		changeId,
+		commitId,
+		description: description === '(no description set)' ? '' : description,
+		isEmpty,
+		author,
+		email,
+		timestamp,
+		bookmarks,
+		diff,
+	};
+}
+
+/**
+ * Parse a unified diff output from `jj diff` into a detailed structured result.
+ *
+ * This enhanced parser splits the diff into per-file sections and counts
+ * additions/deletions, producing a JjDiff that is compatible with
+ * existing diff display components. The per-file `diffText` fields can be
+ * passed directly to `parseGitDiff()` or `react-diff-view`'s `parseDiff()`.
+ *
+ * @param stdout - Raw stdout from `jj diff`
+ * @returns Detailed structured diff with per-file sections and stats
+ */
+export function parseJjDiffDetailed(stdout: string): JjDiff {
+	if (!stdout || !stdout.trim()) {
+		return { raw: '', files: [], fileDiffs: [], additions: 0, deletions: 0 };
+	}
+
+	// Split into per-file sections by "diff --git" headers
+	const sections = stdout.split(/(?=diff --git )/g).filter((s) => s.trim());
+
+	const files: JjDiffFile[] = [];
+	const fileDiffs: JjFileDiff[] = [];
+	let totalAdditions = 0;
+	let totalDeletions = 0;
+
+	for (const section of sections) {
+		const sectionLines = section.split('\n');
+		const headerLine = sectionLines[0];
+
+		// Extract paths from "diff --git a/oldPath b/newPath"
+		const pathMatch = headerLine.match(/^diff --git a\/(.+) b\/(.+)$/);
+		if (!pathMatch) continue;
+
+		const oldPath = pathMatch[1];
+		const newPath = pathMatch[2];
+
+		// Determine file status
+		let status: JjFileStatusType = 'M';
+		let isNewFile = false;
+		let isDeletedFile = false;
+		const isBinary = /Binary files .* differ/.test(section);
+
+		for (let j = 1; j < Math.min(6, sectionLines.length); j++) {
+			const line = sectionLines[j];
+			if (line.startsWith('--- /dev/null') || line.includes('new file mode')) {
+				status = 'A';
+				isNewFile = true;
+				break;
+			}
+			if (line.startsWith('+++ /dev/null') || line.includes('deleted file mode')) {
+				status = 'D';
+				isDeletedFile = true;
+				break;
+			}
+			if (line.startsWith('diff ')) break;
+		}
+
+		if (oldPath !== newPath) {
+			status = 'R';
+		}
+
+		// Count additions and deletions from hunk content lines
+		let additions = 0;
+		let deletions = 0;
+		let inHunk = false;
+
+		for (const line of sectionLines) {
+			if (line.startsWith('@@')) {
+				inHunk = true;
+				continue;
+			}
+			if (inHunk) {
+				if (line.startsWith('+') && !line.startsWith('+++')) {
+					additions++;
+				} else if (line.startsWith('-') && !line.startsWith('---')) {
+					deletions++;
+				}
+			}
+		}
+
+		totalAdditions += additions;
+		totalDeletions += deletions;
+
+		files.push({ path: newPath, status });
+		fileDiffs.push({
+			oldPath,
+			newPath,
+			status,
+			diffText: section,
+			isBinary,
+			isNewFile,
+			isDeletedFile,
+			additions,
+			deletions,
+		});
+	}
+
+	return {
+		raw: stdout,
+		files,
+		fileDiffs,
+		additions: totalAdditions,
+		deletions: totalDeletions,
+	};
 }

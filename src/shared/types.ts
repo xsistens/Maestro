@@ -552,6 +552,78 @@ export interface JjShowResult {
 }
 
 /**
+ * Detailed change information parsed from `jj show` output.
+ * Contains change metadata and structured diff with file-level details.
+ * This is the richer parsed form of JjShowResult, where the diff
+ * has been broken down into per-file entries.
+ */
+export interface JjChangeDetail {
+	/** Change ID (stable identifier) */
+	changeId: string;
+	/** Commit ID (content-based hash) */
+	commitId: string;
+	/** Change description/message */
+	description: string;
+	/** Whether this change is empty (no file changes) */
+	isEmpty: boolean;
+	/** Author name */
+	author: string;
+	/** Author email */
+	email: string;
+	/** Timestamp string */
+	timestamp: string;
+	/** Bookmarks pointing to this change */
+	bookmarks: string[];
+	/** Structured diff result with file summaries */
+	diff: JjDiffResult;
+}
+
+/**
+ * Full structured representation of a jj diff.
+ * Extends JjDiffResult with per-file hunk data for detailed display.
+ * Compatible with existing diff display components via the raw field
+ * which can be passed to parseGitDiff() from gitDiffParser.ts.
+ */
+export interface JjDiff {
+	/** Raw unified diff output (compatible with parseGitDiff) */
+	raw: string;
+	/** Files changed in the diff with status */
+	files: JjDiffFile[];
+	/** Per-file diff sections for detailed rendering */
+	fileDiffs: JjFileDiff[];
+	/** Total additions across all files */
+	additions: number;
+	/** Total deletions across all files */
+	deletions: number;
+}
+
+/**
+ * A single file's diff section extracted from jj diff output.
+ * Contains the raw section text for each file, suitable for
+ * feeding into react-diff-view's parseDiff().
+ */
+export interface JjFileDiff {
+	/** Old file path (or /dev/null for new files) */
+	oldPath: string;
+	/** New file path (or /dev/null for deleted files) */
+	newPath: string;
+	/** Type of change */
+	status: JjFileStatusType;
+	/** Raw diff section for this file */
+	diffText: string;
+	/** Whether this is a binary file */
+	isBinary: boolean;
+	/** Whether this is a new file */
+	isNewFile: boolean;
+	/** Whether this is a deleted file */
+	isDeletedFile: boolean;
+	/** Number of added lines */
+	additions: number;
+	/** Number of deleted lines */
+	deletions: number;
+}
+
+/**
  * Result of a jj mutation operation (describe, new, squash, abandon, edit)
  * Contains success status and relevant IDs
  */

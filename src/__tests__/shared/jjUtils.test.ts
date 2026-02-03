@@ -17,6 +17,8 @@ import {
 	getJjFilesByStatus,
 	parseJjLog,
 	parseJjDiff,
+	parseJjShow,
+	parseJjDiffDetailed,
 } from '../../shared/jjUtils';
 
 describe('jjUtils', () => {
@@ -541,6 +543,343 @@ diff --git a/file3.txt b/file3.txt
 			const output = 'diff --git a/f.txt b/f.txt\n--- a/f.txt\n+++ b/f.txt\n@@ -1 +1 @@\n-a\n+b';
 			const result = parseJjDiff(output);
 			expect(result.raw).toBe(output);
+		});
+	});
+
+	describe('parseJjShow', () => {
+		it('returns null for empty output', () => {
+			expect(parseJjShow('')).toBeNull();
+			expect(parseJjShow('   ')).toBeNull();
+		});
+
+		it('returns null for null/undefined input', () => {
+			expect(parseJjShow(null as unknown as string)).toBeNull();
+			expect(parseJjShow(undefined as unknown as string)).toBeNull();
+		});
+
+		it('parses change with metadata and diff', () => {
+			const output = `Change ID: qzmzpxylbc915fcdaabbccdd
+Commit ID: bc915fcd12345678aabbccdd
+Author: John Doe <john@example.com> (2024-01-15 10:30:00)
+
+Description: Add new feature
+
+diff --git a/file.txt b/file.txt
+--- a/file.txt
++++ b/file.txt
+@@ -1 +1 @@
+-old content
++new content`;
+
+			const result = parseJjShow(output);
+			expect(result).not.toBeNull();
+			expect(result!.changeId).toBe('qzmzpxylbc915fcdaabbccdd');
+			expect(result!.commitId).toBe('bc915fcd12345678aabbccdd');
+			expect(result!.author).toBe('John Doe');
+			expect(result!.email).toBe('john@example.com');
+			expect(result!.timestamp).toBe('2024-01-15 10:30:00');
+			expect(result!.description).toBe('Add new feature');
+			expect(result!.isEmpty).toBe(false);
+			expect(result!.diff.files).toHaveLength(1);
+			expect(result!.diff.files[0]).toEqual({ path: 'file.txt', status: 'M' });
+		});
+
+		it('parses change with no description', () => {
+			const output = `Change ID: abc123
+Commit ID: def456
+Author: Jane <jane@test.com> (2024-02-01 09:00:00)
+
+Description: (no description set)
+`;
+
+			const result = parseJjShow(output);
+			expect(result).not.toBeNull();
+			expect(result!.description).toBe('');
+			expect(result!.isEmpty).toBe(true);
+		});
+
+		it('parses change with bookmarks', () => {
+			const output = `Change ID: abc123
+Commit ID: def456
+Author: Test <test@test.com> (2024-01-01 00:00:00)
+Bookmarks: main develop
+
+Description: My change
+
+diff --git a/f.txt b/f.txt
+--- /dev/null
++++ b/f.txt
+@@ -0,0 +1 @@
++hello`;
+
+			const result = parseJjShow(output);
+			expect(result).not.toBeNull();
+			expect(result!.bookmarks).toEqual(['main', 'develop']);
+		});
+
+		it('parses change with multiple files in diff', () => {
+			const output = `Change ID: xyz789
+Commit ID: uvw012
+Author: Dev <dev@example.com> (2024-03-15 14:00:00)
+
+Description: Multi-file change
+
+diff --git a/added.txt b/added.txt
+--- /dev/null
++++ b/added.txt
+@@ -0,0 +1 @@
++new file
+diff --git a/modified.txt b/modified.txt
+--- a/modified.txt
++++ b/modified.txt
+@@ -1 +1 @@
+-old
++new
+diff --git a/deleted.txt b/deleted.txt
+--- a/deleted.txt
++++ /dev/null
+@@ -1 +0,0 @@
+-removed`;
+
+			const result = parseJjShow(output);
+			expect(result).not.toBeNull();
+			expect(result!.diff.files).toHaveLength(3);
+			expect(result!.diff.files[0]).toEqual({ path: 'added.txt', status: 'A' });
+			expect(result!.diff.files[1]).toEqual({ path: 'modified.txt', status: 'M' });
+			expect(result!.diff.files[2]).toEqual({ path: 'deleted.txt', status: 'D' });
+		});
+
+		it('parses change with metadata only (no diff)', () => {
+			const output = `Change ID: emptychange
+Commit ID: emptycommit
+Author: Dev <dev@test.com> (2024-01-01 00:00:00)
+
+Description: (no description set)
+`;
+
+			const result = parseJjShow(output);
+			expect(result).not.toBeNull();
+			expect(result!.changeId).toBe('emptychange');
+			expect(result!.diff.files).toEqual([]);
+			expect(result!.diff.raw).toBe('');
+		});
+
+		it('returns null when no IDs found', () => {
+			const output = 'Some random output\nwithout any change metadata';
+			expect(parseJjShow(output)).toBeNull();
+		});
+
+		it('parses author without email', () => {
+			const output = `Change ID: abc123
+Commit ID: def456
+Author: JustAName (2024-06-01 12:00:00)
+
+Description: Test
+`;
+
+			const result = parseJjShow(output);
+			expect(result).not.toBeNull();
+			expect(result!.author).toBe('JustAName');
+			expect(result!.email).toBe('');
+			expect(result!.timestamp).toBe('2024-06-01 12:00:00');
+		});
+	});
+
+	describe('parseJjDiffDetailed', () => {
+		it('returns empty result for empty output', () => {
+			const result = parseJjDiffDetailed('');
+			expect(result).toEqual({ raw: '', files: [], fileDiffs: [], additions: 0, deletions: 0 });
+		});
+
+		it('returns empty result for null/undefined input', () => {
+			expect(parseJjDiffDetailed(null as unknown as string)).toEqual({
+				raw: '',
+				files: [],
+				fileDiffs: [],
+				additions: 0,
+				deletions: 0,
+			});
+			expect(parseJjDiffDetailed(undefined as unknown as string)).toEqual({
+				raw: '',
+				files: [],
+				fileDiffs: [],
+				additions: 0,
+				deletions: 0,
+			});
+		});
+
+		it('parses modified file with stats', () => {
+			const output = `diff --git a/file.txt b/file.txt
+--- a/file.txt
++++ b/file.txt
+@@ -1,3 +1,4 @@
+ unchanged
+-old line
++new line
++added line`;
+
+			const result = parseJjDiffDetailed(output);
+			expect(result.raw).toBe(output);
+			expect(result.files).toHaveLength(1);
+			expect(result.files[0]).toEqual({ path: 'file.txt', status: 'M' });
+			expect(result.fileDiffs).toHaveLength(1);
+			expect(result.fileDiffs[0].oldPath).toBe('file.txt');
+			expect(result.fileDiffs[0].newPath).toBe('file.txt');
+			expect(result.fileDiffs[0].status).toBe('M');
+			expect(result.fileDiffs[0].isNewFile).toBe(false);
+			expect(result.fileDiffs[0].isDeletedFile).toBe(false);
+			expect(result.fileDiffs[0].isBinary).toBe(false);
+			expect(result.fileDiffs[0].additions).toBe(2);
+			expect(result.fileDiffs[0].deletions).toBe(1);
+			expect(result.additions).toBe(2);
+			expect(result.deletions).toBe(1);
+		});
+
+		it('parses added file', () => {
+			const output = `diff --git a/new.txt b/new.txt
+--- /dev/null
++++ b/new.txt
+@@ -0,0 +1,3 @@
++line 1
++line 2
++line 3`;
+
+			const result = parseJjDiffDetailed(output);
+			expect(result.files[0]).toEqual({ path: 'new.txt', status: 'A' });
+			expect(result.fileDiffs[0].isNewFile).toBe(true);
+			expect(result.fileDiffs[0].additions).toBe(3);
+			expect(result.fileDiffs[0].deletions).toBe(0);
+			expect(result.additions).toBe(3);
+			expect(result.deletions).toBe(0);
+		});
+
+		it('parses deleted file', () => {
+			const output = `diff --git a/old.txt b/old.txt
+--- a/old.txt
++++ /dev/null
+@@ -1,2 +0,0 @@
+-line 1
+-line 2`;
+
+			const result = parseJjDiffDetailed(output);
+			expect(result.files[0]).toEqual({ path: 'old.txt', status: 'D' });
+			expect(result.fileDiffs[0].isDeletedFile).toBe(true);
+			expect(result.fileDiffs[0].additions).toBe(0);
+			expect(result.fileDiffs[0].deletions).toBe(2);
+		});
+
+		it('parses renamed file', () => {
+			const output = `diff --git a/old-name.txt b/new-name.txt
+--- a/old-name.txt
++++ b/new-name.txt
+@@ -1 +1 @@
+-old
++new`;
+
+			const result = parseJjDiffDetailed(output);
+			expect(result.files[0]).toEqual({ path: 'new-name.txt', status: 'R' });
+			expect(result.fileDiffs[0].oldPath).toBe('old-name.txt');
+			expect(result.fileDiffs[0].newPath).toBe('new-name.txt');
+		});
+
+		it('parses binary file', () => {
+			const output = `diff --git a/image.png b/image.png
+Binary files a/image.png and b/image.png differ`;
+
+			const result = parseJjDiffDetailed(output);
+			expect(result.files[0]).toEqual({ path: 'image.png', status: 'M' });
+			expect(result.fileDiffs[0].isBinary).toBe(true);
+			expect(result.fileDiffs[0].additions).toBe(0);
+			expect(result.fileDiffs[0].deletions).toBe(0);
+		});
+
+		it('parses multiple files with aggregate stats', () => {
+			const output = `diff --git a/file1.txt b/file1.txt
+--- a/file1.txt
++++ b/file1.txt
+@@ -1,2 +1,3 @@
+ unchanged
+-old
++new
++extra
+diff --git a/file2.txt b/file2.txt
+--- /dev/null
++++ b/file2.txt
+@@ -0,0 +1,2 @@
++hello
++world
+diff --git a/file3.txt b/file3.txt
+--- a/file3.txt
++++ /dev/null
+@@ -1 +0,0 @@
+-goodbye`;
+
+			const result = parseJjDiffDetailed(output);
+			expect(result.files).toHaveLength(3);
+			expect(result.fileDiffs).toHaveLength(3);
+
+			// file1: 2 additions, 1 deletion
+			expect(result.fileDiffs[0].additions).toBe(2);
+			expect(result.fileDiffs[0].deletions).toBe(1);
+			// file2: 2 additions, 0 deletions
+			expect(result.fileDiffs[1].additions).toBe(2);
+			expect(result.fileDiffs[1].deletions).toBe(0);
+			// file3: 0 additions, 1 deletion
+			expect(result.fileDiffs[2].additions).toBe(0);
+			expect(result.fileDiffs[2].deletions).toBe(1);
+
+			// Totals: 4 additions, 2 deletions
+			expect(result.additions).toBe(4);
+			expect(result.deletions).toBe(2);
+		});
+
+		it('preserves per-file diffText for component compatibility', () => {
+			const output = `diff --git a/a.txt b/a.txt
+--- a/a.txt
++++ b/a.txt
+@@ -1 +1 @@
+-old
++new
+diff --git a/b.txt b/b.txt
+--- /dev/null
++++ b/b.txt
+@@ -0,0 +1 @@
++content`;
+
+			const result = parseJjDiffDetailed(output);
+			expect(result.fileDiffs).toHaveLength(2);
+			// Each diffText should start with its own "diff --git" header
+			expect(result.fileDiffs[0].diffText).toContain('diff --git a/a.txt b/a.txt');
+			expect(result.fileDiffs[1].diffText).toContain('diff --git a/b.txt b/b.txt');
+			// diffText should not contain the other file's content
+			expect(result.fileDiffs[0].diffText).not.toContain('b.txt');
+			expect(result.fileDiffs[1].diffText).not.toContain('a.txt');
+		});
+
+		it('detects new file mode', () => {
+			const output = `diff --git a/new.txt b/new.txt
+new file mode 100644
+--- /dev/null
++++ b/new.txt
+@@ -0,0 +1 @@
++content`;
+
+			const result = parseJjDiffDetailed(output);
+			expect(result.fileDiffs[0].isNewFile).toBe(true);
+			expect(result.fileDiffs[0].status).toBe('A');
+		});
+
+		it('detects deleted file mode', () => {
+			const output = `diff --git a/old.txt b/old.txt
+deleted file mode 100644
+--- a/old.txt
++++ /dev/null
+@@ -1 +0,0 @@
+-content`;
+
+			const result = parseJjDiffDetailed(output);
+			expect(result.fileDiffs[0].isDeletedFile).toBe(true);
+			expect(result.fileDiffs[0].status).toBe('D');
 		});
 	});
 });
