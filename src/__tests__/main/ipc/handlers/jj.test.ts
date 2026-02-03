@@ -60,7 +60,7 @@ describe('Jj IPC handlers', () => {
 	});
 
 	describe('registration', () => {
-		it('should register all 15 jj handlers', () => {
+		it('should register all 19 jj handlers', () => {
 			const expectedChannels = [
 				'jj:isInstalled',
 				'jj:getVersion',
@@ -69,7 +69,7 @@ describe('Jj IPC handlers', () => {
 				'jj:getBranches',
 				'jj:getCurrentChange',
 				'jj:getRepoRoot',
-				// New operational handlers
+				// Operational handlers
 				'jj:diff',
 				'jj:show',
 				'jj:log',
@@ -78,9 +78,14 @@ describe('Jj IPC handlers', () => {
 				'jj:squash',
 				'jj:abandon',
 				'jj:edit',
+				// Branch/bookmark management handlers
+				'jj:branchCreate',
+				'jj:branchDelete',
+				'jj:branchSet',
+				'jj:branchTrack',
 			];
 
-			expect(handlers.size).toBe(15);
+			expect(handlers.size).toBe(19);
 			for (const channel of expectedChannels) {
 				expect(handlers.has(channel)).toBe(true);
 			}
@@ -581,6 +586,189 @@ describe('Jj IPC handlers', () => {
 
 			expect(result.ok).toBe(false);
 			expect(result.error).toContain('immutable');
+		});
+	});
+
+	// ========================================================================
+	// jj:branchCreate handler tests
+	// ========================================================================
+	describe('jj:branchCreate', () => {
+		it('should create bookmark successfully', async () => {
+			vi.mocked(execFile.execFileNoThrow).mockResolvedValue({
+				stdout: '',
+				stderr: 'Created 1 bookmarks pointing to abc123',
+				exitCode: 0,
+			});
+
+			const handler = handlers.get('jj:branchCreate');
+			const result = await handler!({} as any, '/test/repo', 'my-feature');
+
+			expect(execFile.execFileNoThrow).toHaveBeenCalledWith(
+				'jj',
+				['bookmark', 'create', 'my-feature'],
+				'/test/repo'
+			);
+			expect(result.ok).toBe(true);
+		});
+
+		it('should pass revision argument when provided', async () => {
+			vi.mocked(execFile.execFileNoThrow).mockResolvedValue({
+				stdout: '',
+				stderr: 'Created 1 bookmarks pointing to xyz789',
+				exitCode: 0,
+			});
+
+			const handler = handlers.get('jj:branchCreate');
+			await handler!({} as any, '/test/repo', 'my-feature', 'xyz789');
+
+			expect(execFile.execFileNoThrow).toHaveBeenCalledWith(
+				'jj',
+				['bookmark', 'create', 'my-feature', '-r', 'xyz789'],
+				'/test/repo'
+			);
+		});
+
+		it('should return error when bookmark already exists', async () => {
+			vi.mocked(execFile.execFileNoThrow).mockResolvedValue({
+				stdout: '',
+				stderr: 'Error: Bookmark already exists: my-feature',
+				exitCode: 1,
+			});
+
+			const handler = handlers.get('jj:branchCreate');
+			const result = await handler!({} as any, '/test/repo', 'my-feature');
+
+			expect(result.ok).toBe(false);
+			expect(result.error).toContain('already exists');
+		});
+	});
+
+	// ========================================================================
+	// jj:branchDelete handler tests
+	// ========================================================================
+	describe('jj:branchDelete', () => {
+		it('should delete bookmark successfully', async () => {
+			vi.mocked(execFile.execFileNoThrow).mockResolvedValue({
+				stdout: '',
+				stderr: 'Deleted 1 bookmarks.',
+				exitCode: 0,
+			});
+
+			const handler = handlers.get('jj:branchDelete');
+			const result = await handler!({} as any, '/test/repo', 'old-branch');
+
+			expect(execFile.execFileNoThrow).toHaveBeenCalledWith(
+				'jj',
+				['bookmark', 'delete', 'old-branch'],
+				'/test/repo'
+			);
+			expect(result.ok).toBe(true);
+		});
+
+		it('should return error for nonexistent bookmark', async () => {
+			vi.mocked(execFile.execFileNoThrow).mockResolvedValue({
+				stdout: '',
+				stderr: "Error: Bookmark doesn't exist: nonexistent",
+				exitCode: 1,
+			});
+
+			const handler = handlers.get('jj:branchDelete');
+			const result = await handler!({} as any, '/test/repo', 'nonexistent');
+
+			expect(result.ok).toBe(false);
+			expect(result.error).toContain("doesn't exist");
+		});
+	});
+
+	// ========================================================================
+	// jj:branchSet handler tests
+	// ========================================================================
+	describe('jj:branchSet', () => {
+		it('should set bookmark to specific revision', async () => {
+			vi.mocked(execFile.execFileNoThrow).mockResolvedValue({
+				stdout: '',
+				stderr: 'Updated 1 bookmarks to abc123',
+				exitCode: 0,
+			});
+
+			const handler = handlers.get('jj:branchSet');
+			const result = await handler!(
+				{} as any,
+				'/test/repo',
+				'main',
+				'abc123'
+			);
+
+			expect(execFile.execFileNoThrow).toHaveBeenCalledWith(
+				'jj',
+				['bookmark', 'set', 'main', '-r', 'abc123'],
+				'/test/repo'
+			);
+			expect(result.ok).toBe(true);
+		});
+
+		it('should return error for invalid revision', async () => {
+			vi.mocked(execFile.execFileNoThrow).mockResolvedValue({
+				stdout: '',
+				stderr: 'Error: Revision "badrev" doesn\'t exist',
+				exitCode: 1,
+			});
+
+			const handler = handlers.get('jj:branchSet');
+			const result = await handler!(
+				{} as any,
+				'/test/repo',
+				'main',
+				'badrev'
+			);
+
+			expect(result.ok).toBe(false);
+			expect(result.error).toContain("doesn't exist");
+		});
+	});
+
+	// ========================================================================
+	// jj:branchTrack handler tests
+	// ========================================================================
+	describe('jj:branchTrack', () => {
+		it('should track remote bookmark successfully', async () => {
+			vi.mocked(execFile.execFileNoThrow).mockResolvedValue({
+				stdout: '',
+				stderr: 'Started tracking 1 remote bookmarks.',
+				exitCode: 0,
+			});
+
+			const handler = handlers.get('jj:branchTrack');
+			const result = await handler!(
+				{} as any,
+				'/test/repo',
+				'main@origin'
+			);
+
+			expect(execFile.execFileNoThrow).toHaveBeenCalledWith(
+				'jj',
+				['bookmark', 'track', 'main@origin'],
+				'/test/repo'
+			);
+			expect(result.ok).toBe(true);
+		});
+
+		it('should return error for invalid remote bookmark', async () => {
+			vi.mocked(execFile.execFileNoThrow).mockResolvedValue({
+				stdout: '',
+				stderr: "Error: Remote bookmark doesn't exist: nonexistent@origin",
+				exitCode: 1,
+			});
+
+			const handler = handlers.get('jj:branchTrack');
+			const result = await handler!(
+				{} as any,
+				'/test/repo',
+				'nonexistent@origin'
+			);
+
+			expect(result.ok).toBe(false);
+			expect(result.error).toContain("doesn't exist");
 		});
 	});
 });

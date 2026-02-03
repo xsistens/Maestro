@@ -380,6 +380,24 @@ interface MaestroAPI {
 			bookmarks: string[];
 		} | null>;
 		getRepoRoot: (cwd: string) => Promise<string | null>;
+		branchCreate: (
+			cwd: string,
+			name: string,
+			revision?: string
+		) => Promise<{ ok: boolean; changeId?: string; message: string; error?: string }>;
+		branchDelete: (
+			cwd: string,
+			name: string
+		) => Promise<{ ok: boolean; changeId?: string; message: string; error?: string }>;
+		branchSet: (
+			cwd: string,
+			name: string,
+			revision: string
+		) => Promise<{ ok: boolean; changeId?: string; message: string; error?: string }>;
+		branchTrack: (
+			cwd: string,
+			bookmark: string
+		) => Promise<{ ok: boolean; changeId?: string; message: string; error?: string }>;
 	};
 	// Git API - all methods accept optional sshRemoteId and remoteCwd for remote execution via SSH
 	git: {

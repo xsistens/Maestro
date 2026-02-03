@@ -5,10 +5,16 @@
  * - Installation detection: isInstalled, getVersion
  * - Repository detection: isRepo, getRepoRoot
  * - Status queries: getStatus, getBranches, getCurrentChange
+ * - Branch management: branchCreate, branchDelete, branchSet, branchTrack
  */
 
 import { ipcRenderer } from 'electron';
-import type { JjStatus, JjBookmark, JjChange } from '../../shared/types';
+import type {
+	JjStatus,
+	JjBookmark,
+	JjChange,
+	JjOperationResult,
+} from '../../shared/types';
 
 /**
  * Creates the jj API object for preload exposure
@@ -65,6 +71,41 @@ export function createJjApi() {
 				(result: { root: string }) => result.root,
 				() => null // Return null on error (not a jj repo)
 			),
+
+		/**
+		 * Create a new bookmark (branch)
+		 */
+		branchCreate: (
+			cwd: string,
+			name: string,
+			revision?: string
+		): Promise<JjOperationResult> =>
+			ipcRenderer.invoke('jj:branchCreate', cwd, name, revision),
+
+		/**
+		 * Delete a bookmark (branch)
+		 */
+		branchDelete: (cwd: string, name: string): Promise<JjOperationResult> =>
+			ipcRenderer.invoke('jj:branchDelete', cwd, name),
+
+		/**
+		 * Set a bookmark to a specific revision
+		 */
+		branchSet: (
+			cwd: string,
+			name: string,
+			revision: string
+		): Promise<JjOperationResult> =>
+			ipcRenderer.invoke('jj:branchSet', cwd, name, revision),
+
+		/**
+		 * Track a remote bookmark
+		 */
+		branchTrack: (
+			cwd: string,
+			bookmark: string
+		): Promise<JjOperationResult> =>
+			ipcRenderer.invoke('jj:branchTrack', cwd, bookmark),
 	};
 }
 

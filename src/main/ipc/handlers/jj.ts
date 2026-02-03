@@ -361,5 +361,112 @@ export function registerJjHandlers(): void {
 		)
 	);
 
+	// ========================================================================
+	// Branch/Bookmark Management (create, delete, set, track)
+	// ========================================================================
+
+	// Create a new bookmark (branch)
+	ipcMain.handle(
+		'jj:branchCreate',
+		withIpcErrorLogging(
+			handlerOpts('branchCreate'),
+			async (
+				cwd: string,
+				name: string,
+				revision?: string
+			): Promise<JjOperationResult> => {
+				const args = ['bookmark', 'create', name];
+				if (revision) {
+					args.push('-r', revision);
+				}
+				const result = await execFileNoThrow('jj', args, cwd);
+				if (result.exitCode !== 0) {
+					return {
+						ok: false,
+						message: result.stdout,
+						error: result.stderr || 'jj bookmark create failed',
+					};
+				}
+				return { ok: true, message: result.stderr || result.stdout };
+			}
+		)
+	);
+
+	// Delete a bookmark (branch)
+	ipcMain.handle(
+		'jj:branchDelete',
+		withIpcErrorLogging(
+			handlerOpts('branchDelete'),
+			async (cwd: string, name: string): Promise<JjOperationResult> => {
+				const result = await execFileNoThrow(
+					'jj',
+					['bookmark', 'delete', name],
+					cwd
+				);
+				if (result.exitCode !== 0) {
+					return {
+						ok: false,
+						message: result.stdout,
+						error: result.stderr || 'jj bookmark delete failed',
+					};
+				}
+				return { ok: true, message: result.stderr || result.stdout };
+			}
+		)
+	);
+
+	// Set a bookmark to a specific revision
+	ipcMain.handle(
+		'jj:branchSet',
+		withIpcErrorLogging(
+			handlerOpts('branchSet'),
+			async (
+				cwd: string,
+				name: string,
+				revision: string
+			): Promise<JjOperationResult> => {
+				const result = await execFileNoThrow(
+					'jj',
+					['bookmark', 'set', name, '-r', revision],
+					cwd
+				);
+				if (result.exitCode !== 0) {
+					return {
+						ok: false,
+						message: result.stdout,
+						error: result.stderr || 'jj bookmark set failed',
+					};
+				}
+				return { ok: true, message: result.stderr || result.stdout };
+			}
+		)
+	);
+
+	// Track a remote bookmark
+	ipcMain.handle(
+		'jj:branchTrack',
+		withIpcErrorLogging(
+			handlerOpts('branchTrack'),
+			async (
+				cwd: string,
+				bookmark: string
+			): Promise<JjOperationResult> => {
+				const result = await execFileNoThrow(
+					'jj',
+					['bookmark', 'track', bookmark],
+					cwd
+				);
+				if (result.exitCode !== 0) {
+					return {
+						ok: false,
+						message: result.stdout,
+						error: result.stderr || 'jj bookmark track failed',
+					};
+				}
+				return { ok: true, message: result.stderr || result.stdout };
+			}
+		)
+	);
+
 	logger.debug(`${LOG_CONTEXT} Jj IPC handlers registered`);
 }

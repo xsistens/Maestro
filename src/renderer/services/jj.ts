@@ -4,7 +4,12 @@
  */
 
 import { createIpcMethod } from './ipcWrapper';
-import type { JjStatus, JjBookmark, JjChange } from '../../shared/types';
+import type {
+	JjStatus,
+	JjBookmark,
+	JjChange,
+	JjOperationResult,
+} from '../../shared/types';
 
 /**
  * Default empty JjStatus for error fallback
@@ -114,6 +119,78 @@ export const jjService = {
 			call: () => window.maestro.jj.getRepoRoot(cwd),
 			errorContext: 'Jj getRepoRoot',
 			defaultValue: null,
+		});
+	},
+
+	/**
+	 * Create a new bookmark (branch) in the jj repository
+	 * @param cwd Working directory path
+	 * @param name Bookmark name to create
+	 * @param revision Optional revision to point the bookmark at
+	 * @returns Promise<JjOperationResult> - operation result
+	 */
+	async branchCreate(
+		cwd: string,
+		name: string,
+		revision?: string
+	): Promise<JjOperationResult> {
+		return createIpcMethod({
+			call: () => window.maestro.jj.branchCreate(cwd, name, revision),
+			errorContext: 'Jj branchCreate',
+			defaultValue: { ok: false, message: '', error: 'IPC call failed' },
+		});
+	},
+
+	/**
+	 * Delete a bookmark (branch) from the jj repository
+	 * @param cwd Working directory path
+	 * @param name Bookmark name to delete
+	 * @returns Promise<JjOperationResult> - operation result
+	 */
+	async branchDelete(
+		cwd: string,
+		name: string
+	): Promise<JjOperationResult> {
+		return createIpcMethod({
+			call: () => window.maestro.jj.branchDelete(cwd, name),
+			errorContext: 'Jj branchDelete',
+			defaultValue: { ok: false, message: '', error: 'IPC call failed' },
+		});
+	},
+
+	/**
+	 * Set a bookmark to a specific revision
+	 * @param cwd Working directory path
+	 * @param name Bookmark name to set
+	 * @param revision Target revision
+	 * @returns Promise<JjOperationResult> - operation result
+	 */
+	async branchSet(
+		cwd: string,
+		name: string,
+		revision: string
+	): Promise<JjOperationResult> {
+		return createIpcMethod({
+			call: () => window.maestro.jj.branchSet(cwd, name, revision),
+			errorContext: 'Jj branchSet',
+			defaultValue: { ok: false, message: '', error: 'IPC call failed' },
+		});
+	},
+
+	/**
+	 * Track a remote bookmark
+	 * @param cwd Working directory path
+	 * @param bookmark Bookmark reference to track (e.g., "name@remote")
+	 * @returns Promise<JjOperationResult> - operation result
+	 */
+	async branchTrack(
+		cwd: string,
+		bookmark: string
+	): Promise<JjOperationResult> {
+		return createIpcMethod({
+			call: () => window.maestro.jj.branchTrack(cwd, bookmark),
+			errorContext: 'Jj branchTrack',
+			defaultValue: { ok: false, message: '', error: 'IPC call failed' },
 		});
 	},
 };
