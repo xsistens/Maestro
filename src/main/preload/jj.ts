@@ -5,6 +5,8 @@
  * - Installation detection: isInstalled, getVersion
  * - Repository detection: isRepo, getRepoRoot
  * - Status queries: getStatus, getBranches, getCurrentChange
+ * - Diff/show/log operations: diff, show, log
+ * - Change management: describe, new, squash, abandon, edit
  * - Branch management: branchCreate, branchDelete, branchSet, branchTrack
  * - Git interop: gitFetch, gitPush, gitClone
  */
@@ -14,6 +16,9 @@ import type {
 	JjStatus,
 	JjBookmark,
 	JjChange,
+	JjDiffResult,
+	JjShowResult,
+	JjLogEntry,
 	JjOperationResult,
 } from '../../shared/types';
 
@@ -72,6 +77,73 @@ export function createJjApi() {
 				(result: { root: string }) => result.root,
 				() => null // Return null on error (not a jj repo)
 			),
+
+		// ========================================================================
+		// Diff/Show/Log Operations
+		// ========================================================================
+
+		/**
+		 * Get diff for current changes or a specific revision
+		 */
+		diff: (cwd: string, revision?: string): Promise<JjDiffResult> =>
+			ipcRenderer.invoke('jj:diff', cwd, revision),
+
+		/**
+		 * Show specific change details (metadata + diff)
+		 */
+		show: (cwd: string, changeId?: string): Promise<JjShowResult | null> =>
+			ipcRenderer.invoke('jj:show', cwd, changeId),
+
+		/**
+		 * Get commit/change history log
+		 */
+		log: (
+			cwd: string,
+			options?: { revset?: string; limit?: number }
+		): Promise<{ entries: JjLogEntry[] }> =>
+			ipcRenderer.invoke('jj:log', cwd, options),
+
+		// ========================================================================
+		// Change Management Operations
+		// ========================================================================
+
+		/**
+		 * Set change description
+		 */
+		describe: (
+			cwd: string,
+			message: string,
+			changeId?: string
+		): Promise<JjOperationResult> =>
+			ipcRenderer.invoke('jj:describe', cwd, message, changeId),
+
+		/**
+		 * Create a new change
+		 */
+		new: (cwd: string, revision?: string): Promise<JjOperationResult> =>
+			ipcRenderer.invoke('jj:new', cwd, revision),
+
+		/**
+		 * Squash changes into parent
+		 */
+		squash: (cwd: string, revision?: string): Promise<JjOperationResult> =>
+			ipcRenderer.invoke('jj:squash', cwd, revision),
+
+		/**
+		 * Abandon a change
+		 */
+		abandon: (cwd: string, changeId: string): Promise<JjOperationResult> =>
+			ipcRenderer.invoke('jj:abandon', cwd, changeId),
+
+		/**
+		 * Edit an existing change (set it as the working copy)
+		 */
+		edit: (cwd: string, changeId: string): Promise<JjOperationResult> =>
+			ipcRenderer.invoke('jj:edit', cwd, changeId),
+
+		// ========================================================================
+		// Branch/Bookmark Management
+		// ========================================================================
 
 		/**
 		 * Create a new bookmark (branch)

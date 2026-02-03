@@ -380,6 +380,68 @@ interface MaestroAPI {
 			bookmarks: string[];
 		} | null>;
 		getRepoRoot: (cwd: string) => Promise<string | null>;
+		// Diff/Show/Log operations
+		diff: (
+			cwd: string,
+			revision?: string
+		) => Promise<{
+			raw: string;
+			files: Array<{ path: string; status: 'A' | 'M' | 'D' | 'R' | 'C' }>;
+		}>;
+		show: (
+			cwd: string,
+			changeId?: string
+		) => Promise<{
+			change: {
+				changeId: string;
+				commitId: string;
+				description: string;
+				isEmpty: boolean;
+				author: string;
+				email: string;
+				timestamp: string;
+				bookmarks: string[];
+			};
+			diff: string;
+		} | null>;
+		log: (
+			cwd: string,
+			options?: { revset?: string; limit?: number }
+		) => Promise<{
+			entries: Array<{
+				changeId: string;
+				commitId: string;
+				description: string;
+				isEmpty: boolean;
+				author: string;
+				email: string;
+				timestamp: string;
+				bookmarks: string[];
+			}>;
+		}>;
+		// Change management operations
+		describe: (
+			cwd: string,
+			message: string,
+			changeId?: string
+		) => Promise<{ ok: boolean; changeId?: string; message: string; error?: string }>;
+		new: (
+			cwd: string,
+			revision?: string
+		) => Promise<{ ok: boolean; changeId?: string; message: string; error?: string }>;
+		squash: (
+			cwd: string,
+			revision?: string
+		) => Promise<{ ok: boolean; changeId?: string; message: string; error?: string }>;
+		abandon: (
+			cwd: string,
+			changeId: string
+		) => Promise<{ ok: boolean; changeId?: string; message: string; error?: string }>;
+		edit: (
+			cwd: string,
+			changeId: string
+		) => Promise<{ ok: boolean; changeId?: string; message: string; error?: string }>;
+		// Branch/Bookmark management
 		branchCreate: (
 			cwd: string,
 			name: string,
