@@ -26,6 +26,7 @@ import type {
 	JjShowResult,
 	JjOperationResult,
 } from '../../../shared/types';
+import { detectJjError } from '../../parsers/jj-error-patterns';
 
 const LOG_CONTEXT = '[Jj]';
 
@@ -35,6 +36,16 @@ const handlerOpts = (operation: string, logSuccess = false): CreateHandlerOption
 	operation,
 	logSuccess,
 });
+
+/** Helper to build a failed JjOperationResult with structured error detection */
+function failedResult(stderr: string, stdout: string, fallbackMessage: string): JjOperationResult {
+	return {
+		ok: false,
+		message: stdout,
+		error: stderr || fallbackMessage,
+		jjError: detectJjError(stderr),
+	};
+}
 
 /**
  * Register all Jujutsu (jj) version control IPC handlers.
@@ -258,11 +269,7 @@ export function registerJjHandlers(): void {
 				}
 				const result = await execFileNoThrow('jj', args, cwd);
 				if (result.exitCode !== 0) {
-					return {
-						ok: false,
-						message: result.stdout,
-						error: result.stderr || 'jj describe failed',
-					};
+					return failedResult(result.stderr, result.stdout, 'jj describe failed');
 				}
 				return { ok: true, message: result.stdout };
 			}
@@ -281,11 +288,7 @@ export function registerJjHandlers(): void {
 				}
 				const result = await execFileNoThrow('jj', args, cwd);
 				if (result.exitCode !== 0) {
-					return {
-						ok: false,
-						message: result.stdout,
-						error: result.stderr || 'jj new failed',
-					};
+					return failedResult(result.stderr, result.stdout, 'jj new failed');
 				}
 				// Extract new change ID from output if available
 				const changeIdMatch = result.stderr.match(
@@ -312,11 +315,7 @@ export function registerJjHandlers(): void {
 				}
 				const result = await execFileNoThrow('jj', args, cwd);
 				if (result.exitCode !== 0) {
-					return {
-						ok: false,
-						message: result.stdout,
-						error: result.stderr || 'jj squash failed',
-					};
+					return failedResult(result.stderr, result.stdout, 'jj squash failed');
 				}
 				return { ok: true, message: result.stderr || result.stdout };
 			}
@@ -331,11 +330,7 @@ export function registerJjHandlers(): void {
 			async (cwd: string, changeId: string): Promise<JjOperationResult> => {
 				const result = await execFileNoThrow('jj', ['abandon', changeId], cwd);
 				if (result.exitCode !== 0) {
-					return {
-						ok: false,
-						message: result.stdout,
-						error: result.stderr || 'jj abandon failed',
-					};
+					return failedResult(result.stderr, result.stdout, 'jj abandon failed');
 				}
 				return { ok: true, message: result.stderr || result.stdout };
 			}
@@ -350,11 +345,7 @@ export function registerJjHandlers(): void {
 			async (cwd: string, changeId: string): Promise<JjOperationResult> => {
 				const result = await execFileNoThrow('jj', ['edit', changeId], cwd);
 				if (result.exitCode !== 0) {
-					return {
-						ok: false,
-						message: result.stdout,
-						error: result.stderr || 'jj edit failed',
-					};
+					return failedResult(result.stderr, result.stdout, 'jj edit failed');
 				}
 				return { ok: true, message: result.stderr || result.stdout };
 			}
@@ -381,11 +372,7 @@ export function registerJjHandlers(): void {
 				}
 				const result = await execFileNoThrow('jj', args, cwd);
 				if (result.exitCode !== 0) {
-					return {
-						ok: false,
-						message: result.stdout,
-						error: result.stderr || 'jj bookmark create failed',
-					};
+					return failedResult(result.stderr, result.stdout, 'jj bookmark create failed');
 				}
 				return { ok: true, message: result.stderr || result.stdout };
 			}
@@ -404,11 +391,7 @@ export function registerJjHandlers(): void {
 					cwd
 				);
 				if (result.exitCode !== 0) {
-					return {
-						ok: false,
-						message: result.stdout,
-						error: result.stderr || 'jj bookmark delete failed',
-					};
+					return failedResult(result.stderr, result.stdout, 'jj bookmark delete failed');
 				}
 				return { ok: true, message: result.stderr || result.stdout };
 			}
@@ -431,11 +414,7 @@ export function registerJjHandlers(): void {
 					cwd
 				);
 				if (result.exitCode !== 0) {
-					return {
-						ok: false,
-						message: result.stdout,
-						error: result.stderr || 'jj bookmark set failed',
-					};
+					return failedResult(result.stderr, result.stdout, 'jj bookmark set failed');
 				}
 				return { ok: true, message: result.stderr || result.stdout };
 			}
@@ -457,11 +436,7 @@ export function registerJjHandlers(): void {
 					cwd
 				);
 				if (result.exitCode !== 0) {
-					return {
-						ok: false,
-						message: result.stdout,
-						error: result.stderr || 'jj bookmark track failed',
-					};
+					return failedResult(result.stderr, result.stdout, 'jj bookmark track failed');
 				}
 				return { ok: true, message: result.stderr || result.stdout };
 			}
@@ -490,11 +465,7 @@ export function registerJjHandlers(): void {
 				}
 				const result = await execFileNoThrow('jj', args, cwd);
 				if (result.exitCode !== 0) {
-					return {
-						ok: false,
-						message: result.stdout,
-						error: result.stderr || 'jj git fetch failed',
-					};
+					return failedResult(result.stderr, result.stdout, 'jj git fetch failed');
 				}
 				return { ok: true, message: result.stderr || result.stdout };
 			}
@@ -522,11 +493,7 @@ export function registerJjHandlers(): void {
 				}
 				const result = await execFileNoThrow('jj', args, cwd);
 				if (result.exitCode !== 0) {
-					return {
-						ok: false,
-						message: result.stdout,
-						error: result.stderr || 'jj git push failed',
-					};
+					return failedResult(result.stderr, result.stdout, 'jj git push failed');
 				}
 				return { ok: true, message: result.stderr || result.stdout };
 			}
@@ -549,11 +516,7 @@ export function registerJjHandlers(): void {
 				}
 				const result = await execFileNoThrow('jj', args, cwd);
 				if (result.exitCode !== 0) {
-					return {
-						ok: false,
-						message: result.stdout,
-						error: result.stderr || 'jj git clone failed',
-					};
+					return failedResult(result.stderr, result.stdout, 'jj git clone failed');
 				}
 				return { ok: true, message: result.stderr || result.stdout };
 			}

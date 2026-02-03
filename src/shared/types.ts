@@ -636,4 +636,36 @@ export interface JjOperationResult {
 	message: string;
 	/** Error message if operation failed */
 	error?: string;
+	/** Structured error info when detected */
+	jjError?: JjError | null;
+}
+
+/**
+ * Error types specific to jj (Jujutsu) version control operations.
+ * Unlike AI agent errors, these represent VCS operation failures.
+ */
+export type JjErrorType =
+	| 'stale_working_copy'   // Working copy is behind or out of date
+	| 'conflict'             // Merge/rebase conflicts detected
+	| 'missing_change'       // Referenced change or revision not found
+	| 'auth_failure'         // Git remote authentication failed
+	| 'concurrent_operation' // Another jj operation is running
+	| 'immutable_change'     // Cannot modify immutable/protected change
+	| 'bookmark_error'       // Bookmark (branch) operation error
+	| 'not_a_repo'           // Not in a jj repository
+	| 'unknown';             // Unrecognized jj error
+
+/**
+ * Structured error from a jj operation.
+ * Provides user-friendly messages and recovery hints for common jj failures.
+ */
+export interface JjError {
+	/** Categorized error type */
+	type: JjErrorType;
+	/** User-friendly error message */
+	message: string;
+	/** Whether the error can be automatically recovered from */
+	recoverable: boolean;
+	/** Raw stderr/stdout from the jj command */
+	raw?: string;
 }
