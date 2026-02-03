@@ -132,6 +132,7 @@ import { ToastContainer } from './components/Toast';
 import { gitService } from './services/git';
 import { getSpeckitCommands } from './services/speckit';
 import { getOpenSpecCommands } from './services/openspec';
+import { detectRepositoryVcs, getEffectiveVcs } from './utils/vcsDetection';
 
 // Import prompts and synopsis parsing
 import { autorunSynopsisPrompt, maestroSystemPrompt } from '../prompts';
@@ -567,6 +568,9 @@ function MaestroConsoleInner() {
 
 		// File tab refresh settings
 		fileTabAutoRefreshEnabled,
+
+		// VCS settings
+		vcsMode,
 	} = settings;
 
 	// --- KEYBOARD SHORTCUT HELPERS ---
@@ -1034,6 +1038,11 @@ function MaestroConsoleInner() {
 				// Check if the working directory is a Git repository (via SSH for remote sessions)
 				const isGitRepo = await gitService.isRepo(cwd, sshRemoteId);
 
+				// Detect effective VCS type based on user preference and repository detection
+				const detectedVcs = await detectRepositoryVcs(cwd);
+				const vcsType: 'git' | 'jj' | undefined =
+					detectedVcs === 'none' ? undefined : await getEffectiveVcs(cwd, vcsMode);
+
 				// Fetch git branches and tags if it's a git repo
 				let gitBranches: string[] | undefined;
 				let gitTags: string[] | undefined;
@@ -1046,13 +1055,14 @@ function MaestroConsoleInner() {
 					gitRefsCacheTime = Date.now();
 				}
 
-				// Update the session with git info and mark SSH as connected
+				// Update the session with git info, VCS type, and mark SSH as connected
 				setSessions((prev) =>
 					prev.map((s) =>
 						s.id === sessionId
 							? {
 									...s,
 									isGitRepo,
+									vcsType,
 									gitBranches,
 									gitTags,
 									gitRefsCacheTime,
@@ -1072,7 +1082,7 @@ function MaestroConsoleInner() {
 				);
 			}
 		},
-		[]
+		[vcsMode]
 	);
 
 	const restoreSession = async (session: Session): Promise<Session> => {
@@ -1195,6 +1205,7 @@ function MaestroConsoleInner() {
 				// For local sessions, check git status synchronously (fast, sub-100ms)
 				// For remote sessions, use persisted value or default to false, then update in background
 				let isGitRepo = correctedSession.isGitRepo ?? false;
+				let vcsType: 'git' | 'jj' | undefined = correctedSession.vcsType;
 				let gitBranches = correctedSession.gitBranches;
 				let gitTags = correctedSession.gitTags;
 				let gitRefsCacheTime = correctedSession.gitRefsCacheTime;
@@ -1202,6 +1213,14 @@ function MaestroConsoleInner() {
 				if (!isRemoteSession) {
 					// Local session - check git status synchronously (fast)
 					isGitRepo = await gitService.isRepo(correctedSession.cwd, undefined);
+
+					// Detect effective VCS type based on user preference and repository detection
+					const detectedVcs = await detectRepositoryVcs(correctedSession.cwd);
+					vcsType =
+						detectedVcs === 'none'
+							? undefined
+							: await getEffectiveVcs(correctedSession.cwd, vcsMode);
+
 					if (isGitRepo) {
 						[gitBranches, gitTags] = await Promise.all([
 							gitService.getBranches(correctedSession.cwd, undefined),
@@ -1232,6 +1251,7 @@ function MaestroConsoleInner() {
 					currentCycleBytes: undefined,
 					statusMessage: undefined,
 					isGitRepo, // Update Git status (or use persisted value for remote)
+					vcsType, // Update VCS type (or use persisted value for remote)
 					gitBranches,
 					gitTags,
 					gitRefsCacheTime,

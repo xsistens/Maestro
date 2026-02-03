@@ -25,6 +25,7 @@ import {
 } from './stores';
 import {
 	registerGitHandlers,
+	registerJjHandlers,
 	registerAutorunHandlers,
 	registerPlaybooksHandlers,
 	registerHistoryHandlers,
@@ -226,6 +227,9 @@ const cliWatcher = createCliWatcher({
 
 const devServerPort = process.env.VITE_PORT ? parseInt(process.env.VITE_PORT, 10) : 5173;
 const devServerUrl = `http://localhost:${devServerPort}`;
+if (isDevelopment) {
+	console.log(`[DEV MODE] Connecting to Vite dev server at ${devServerUrl} (VITE_PORT=${process.env.VITE_PORT ?? 'unset'})`);
+}
 
 // Create window manager with dependency injection (Phase 4 refactoring)
 const windowManager = createWindowManager({
@@ -408,6 +412,9 @@ function setupIpcHandlers() {
 	registerGitHandlers({
 		settingsStore: store,
 	});
+
+	// Jujutsu (jj) VCS operations - extracted to src/main/ipc/handlers/jj.ts
+	registerJjHandlers();
 
 	// Auto Run operations - extracted to src/main/ipc/handlers/autorun.ts
 	registerAutorunHandlers({

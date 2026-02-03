@@ -80,6 +80,11 @@ export function VcsSettings({
 	const [checkingInstallation, setCheckingInstallation] = useState(false);
 	const [showCustomPath, setShowCustomPath] = useState(false);
 
+	// Check jj installation on mount to ensure status is current
+	useEffect(() => {
+		checkJjInstallation();
+	}, [checkJjInstallation]);
+
 	// Fetch jj version when installed
 	useEffect(() => {
 		const fetchVersion = async () => {

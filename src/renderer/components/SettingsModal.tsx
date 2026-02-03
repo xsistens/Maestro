@@ -55,6 +55,8 @@ import { SettingCheckbox } from './SettingCheckbox';
 import { FontConfigurationPanel } from './FontConfigurationPanel';
 import { NotificationsPanel } from './NotificationsPanel';
 import { SshRemotesSection } from './Settings/SshRemotesSection';
+import { VcsSettings } from './Settings/VcsSettings';
+import SshRemoteIgnoreSection from './Settings/SshRemoteIgnoreSection';
 
 // Feature flags - set to true to enable dormant features
 const FEATURE_FLAGS = {
@@ -272,7 +274,7 @@ interface SettingsModalProps {
 	setCrashReportingEnabled: (value: boolean) => void;
 	customAICommands: CustomAICommand[];
 	setCustomAICommands: (commands: CustomAICommand[]) => void;
-	initialTab?: 'general' | 'llm' | 'shortcuts' | 'theme' | 'notifications' | 'aicommands' | 'ssh';
+	initialTab?: 'general' | 'display' | 'llm' | 'shortcuts' | 'theme' | 'notifications' | 'aicommands' | 'vcs' | 'ssh';
 	hasNoAgents?: boolean;
 	onThemeImportError?: (message: string) => void;
 	onThemeImportSuccess?: (message: string) => void;
@@ -303,10 +305,24 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 		setDisableGpuAcceleration,
 		disableConfetti,
 		setDisableConfetti,
+		// SSH Remote file indexing settings
+		sshRemoteIgnorePatterns,
+		setSshRemoteIgnorePatterns,
+		sshRemoteHonorGitignore,
+		setSshRemoteHonorGitignore,
+		// Automatic tab naming settings
+		automaticTabNamingEnabled,
+		setAutomaticTabNamingEnabled,	
+		vcsMode,
+		setVcsMode,
+		jjPath,
+		setJjPath,
+		jjInstalled,
+		checkJjInstallation	
 	} = useSettings();
 
 	const [activeTab, setActiveTab] = useState<
-		'general' | 'llm' | 'shortcuts' | 'theme' | 'notifications' | 'aicommands' | 'ssh'
+		'general' | 'display' | 'llm' | 'shortcuts' | 'theme' | 'notifications' | 'aicommands' | 'vcs' | 'ssh'
 	>('general');
 	const [systemFonts, setSystemFonts] = useState<string[]>([]);
 	const [customFonts, setCustomFonts] = useState<string[]>([]);
@@ -460,10 +476,10 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 		const handleTabNavigation = (e: KeyboardEvent) => {
 			const tabs: Array<
-				'general' | 'llm' | 'shortcuts' | 'theme' | 'notifications' | 'aicommands' | 'ssh'
+				'general' | 'display' | 'vcs' | 'llm' | 'shortcuts' | 'theme' | 'notifications' | 'aicommands' | 'ssh'
 			> = FEATURE_FLAGS.LLM_SETTINGS
-				? ['general', 'llm', 'shortcuts', 'theme', 'notifications', 'aicommands', 'ssh']
-				: ['general', 'shortcuts', 'theme', 'notifications', 'aicommands', 'ssh'];
+				? ['general', 'display', 'vcs', 'llm', 'shortcuts', 'theme', 'notifications', 'aicommands', 'ssh']
+				: ['general', 'display', 'vcs', 'shortcuts', 'theme', 'notifications', 'aicommands', 'ssh'];
 			const currentIndex = tabs.indexOf(activeTab);
 
 			if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === '[') {
@@ -1185,27 +1201,6 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 										/>
 									</div>
 								)}
-							</div>
-
-							{/* System Log Level */}
-							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2">
-									System Log Level
-								</label>
-								<ToggleButtonGroup
-									options={[
-										{ value: 'debug', label: 'Debug', activeColor: '#6366f1' },
-										{ value: 'info', label: 'Info', activeColor: '#3b82f6' },
-										{ value: 'warn', label: 'Warn', activeColor: '#f59e0b' },
-										{ value: 'error', label: 'Error', activeColor: '#ef4444' },
-									]}
-									value={props.logLevel}
-									onChange={props.setLogLevel}
-									theme={theme}
-								/>
-								<p className="text-xs opacity-50 mt-2">
-									Higher levels show fewer logs. Debug shows all logs, Error shows only errors.
-								</p>
 							</div>
 
 							{/* GitHub CLI Path */}
@@ -2026,6 +2021,27 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									onChange={props.setTerminalWidth}
 									theme={theme}
 								/>
+							</div>
+
+							{/* Log Level */}
+							<div>
+								<label className="block text-xs font-bold opacity-70 uppercase mb-2">
+									System Log Level
+								</label>
+								<ToggleButtonGroup
+									options={[
+										{ value: 'debug', label: 'Debug', activeColor: '#6366f1' },
+										{ value: 'info', label: 'Info', activeColor: '#3b82f6' },
+										{ value: 'warn', label: 'Warn', activeColor: '#f59e0b' },
+										{ value: 'error', label: 'Error', activeColor: '#ef4444' },
+									]}
+									value={props.logLevel}
+									onChange={props.setLogLevel}
+									theme={theme}
+								/>
+								<p className="text-xs opacity-50 mt-2">
+									Higher levels show fewer logs. Debug shows all logs, Error shows only errors.
+								</p>
 							</div>
 
 							{/* Max Log Buffer */}

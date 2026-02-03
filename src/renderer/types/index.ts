@@ -530,6 +530,9 @@ export interface Session {
 	liveUrl?: string;
 	changedFiles: FileArtifact[];
 	isGitRepo: boolean;
+	// Effective VCS type based on user preference and repository detection
+	// undefined = no VCS detected, 'git' = git repository, 'jj' = jj (Jujutsu) repository
+	vcsType?: 'git' | 'jj';
 	// Git branches and tags cache (for tab completion)
 	gitBranches?: string[];
 	gitTags?: string[];

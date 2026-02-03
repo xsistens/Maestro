@@ -84,8 +84,8 @@ export const SessionItem = memo(function SessionItem({
 	onStartRename,
 	onToggleBookmark,
 }: SessionItemProps) {
-	// Determine if we show the GIT/LOCAL badge (not shown in bookmark variant, terminal sessions, or worktree variant)
-	const showGitLocalBadge =
+	// Determine if we show the VCS/LOCAL badge (not shown in bookmark variant, terminal sessions, or worktree variant)
+	const showVcsLocalBadge =
 		variant !== 'bookmark' && variant !== 'worktree' && session.toolType !== 'terminal';
 
 	// Determine container styling based on variant
@@ -203,9 +203,9 @@ export const SessionItem = memo(function SessionItem({
 				)}
 
 				{/* Location Indicator Pills */}
-				{showGitLocalBadge &&
-					(session.isGitRepo ? (
-						/* Git repo: Show server icon pill (if remote) + GIT pill */
+				{showVcsLocalBadge &&
+					(session.vcsType ? (
+						/* VCS repo: Show server icon pill (if remote) + VCS type pill */
 						<>
 							{session.sessionSshRemoteConfig?.enabled && (
 								<div
@@ -225,13 +225,13 @@ export const SessionItem = memo(function SessionItem({
 									backgroundColor: theme.colors.accent + '30',
 									color: theme.colors.accent,
 								}}
-								title="Git repository"
+								title={session.vcsType === 'jj' ? 'Jujutsu repository' : 'Git repository'}
 							>
-								GIT
+								{session.vcsType.toUpperCase()}
 							</div>
 						</>
 					) : (
-						/* Plain directory: Show REMOTE or LOCAL (not both) */
+						/* No VCS detected: Show REMOTE or LOCAL */
 						<div
 							className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase"
 							style={{

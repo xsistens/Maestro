@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useSettings } from '../../../renderer/hooks';
+import { getActiveVcsMode } from '../../../renderer/hooks/settings/useSettings';
 import type {
 	GlobalStats,
 	AutoRunStats,
@@ -1816,5 +1817,129 @@ describe('useSettings', () => {
 				expect(analytics.averagePhasesPerWizard).toBe(3.2);
 			});
 		});
+	});
+});
+
+/**
+ * Tests for getActiveVcsMode pure function
+ *
+ * getActiveVcsMode resolves the user's VCS preference ('git' | 'jj' | 'auto')
+ * into an effective VCS mode ('git' | 'jj') based on system state: whether jj
+ * is installed and whether the current directory is a jj repository.
+ */
+describe('getActiveVcsMode', () => {
+	describe('vcsMode = "git" (explicit git mode)', () => {
+		it('should return "git" when jj is not installed and not a jj repo', () => {
+			expect(getActiveVcsMode('git', false, false)).toBe('git');
+		});
+
+		it('should return "git" when jj is installed but not a jj repo', () => {
+			expect(getActiveVcsMode('git', false, true)).toBe('git');
+		});
+
+		it('should return "git" when jj is not installed but is a jj repo', () => {
+			expect(getActiveVcsMode('git', true, false)).toBe('git');
+		});
+
+		it('should return "git" when jj is installed and is a jj repo', () => {
+			expect(getActiveVcsMode('git', true, true)).toBe('git');
+		});
+	});
+
+	describe('vcsMode = "jj" (explicit jj mode)', () => {
+		it('should return "git" when jj is not installed and not a jj repo', () => {
+			expect(getActiveVcsMode('jj', false, false)).toBe('git');
+		});
+
+		it('should return "jj" when jj is installed but not a jj repo', () => {
+			expect(getActiveVcsMode('jj', false, true)).toBe('jj');
+		});
+
+		it('should return "git" when jj is not installed even if it is a jj repo', () => {
+			expect(getActiveVcsMode('jj', true, false)).toBe('git');
+		});
+
+		it('should return "jj" when jj is installed and is a jj repo', () => {
+			expect(getActiveVcsMode('jj', true, true)).toBe('jj');
+		});
+	});
+
+	describe('vcsMode = "auto" (automatic detection)', () => {
+		it('should return "git" when jj is not installed and not a jj repo', () => {
+			expect(getActiveVcsMode('auto', false, false)).toBe('git');
+		});
+
+		it('should return "git" when jj is installed but not a jj repo', () => {
+			expect(getActiveVcsMode('auto', false, true)).toBe('git');
+		});
+
+		it('should return "git" when jj is not installed even if it is a jj repo', () => {
+			expect(getActiveVcsMode('auto', true, false)).toBe('git');
+		});
+
+		it('should return "jj" only when jj is installed AND is a jj repo', () => {
+			expect(getActiveVcsMode('auto', true, true)).toBe('jj');
+		});
+	});
+
+	describe('edge cases', () => {
+		it('should return "git" when all parameters are false', () => {
+			expect(getActiveVcsMode('git', false, false)).toBe('git');
+			expect(getActiveVcsMode('jj', false, false)).toBe('git');
+			expect(getActiveVcsMode('auto', false, false)).toBe('git');
+		});
+
+		it('should return correct values when all parameters favor jj', () => {
+			expect(getActiveVcsMode('git', true, true)).toBe('git');
+			expect(getActiveVcsMode('jj', true, true)).toBe('jj');
+			expect(getActiveVcsMode('auto', true, true)).toBe('jj');
+		});
+
+		it('should handle jjInstalled=true with hasJjRepo=false across all modes', () => {
+			expect(getActiveVcsMode('git', false, true)).toBe('git');
+			expect(getActiveVcsMode('jj', false, true)).toBe('jj');
+			expect(getActiveVcsMode('auto', false, true)).toBe('git');
+		});
+
+		it('should handle hasJjRepo=true with jjInstalled=false across all modes', () => {
+			expect(getActiveVcsMode('git', true, false)).toBe('git');
+			expect(getActiveVcsMode('jj', true, false)).toBe('git');
+			expect(getActiveVcsMode('auto', true, false)).toBe('git');
+		});
+	});
+
+	describe('exhaustive boolean matrix', () => {
+		// Full truth table covering all 3 modes x 4 boolean combinations = 12 cases
+		const cases: Array<{
+			vcsMode: 'git' | 'jj' | 'auto';
+			hasJjRepo: boolean;
+			jjInstalled: boolean;
+			expected: 'git' | 'jj';
+		}> = [
+			// git mode: always returns 'git'
+			{ vcsMode: 'git', hasJjRepo: false, jjInstalled: false, expected: 'git' },
+			{ vcsMode: 'git', hasJjRepo: false, jjInstalled: true, expected: 'git' },
+			{ vcsMode: 'git', hasJjRepo: true, jjInstalled: false, expected: 'git' },
+			{ vcsMode: 'git', hasJjRepo: true, jjInstalled: true, expected: 'git' },
+
+			// jj mode: returns 'jj' only if jjInstalled
+			{ vcsMode: 'jj', hasJjRepo: false, jjInstalled: false, expected: 'git' },
+			{ vcsMode: 'jj', hasJjRepo: false, jjInstalled: true, expected: 'jj' },
+			{ vcsMode: 'jj', hasJjRepo: true, jjInstalled: false, expected: 'git' },
+			{ vcsMode: 'jj', hasJjRepo: true, jjInstalled: true, expected: 'jj' },
+
+			// auto mode: returns 'jj' only if jjInstalled AND hasJjRepo
+			{ vcsMode: 'auto', hasJjRepo: false, jjInstalled: false, expected: 'git' },
+			{ vcsMode: 'auto', hasJjRepo: false, jjInstalled: true, expected: 'git' },
+			{ vcsMode: 'auto', hasJjRepo: true, jjInstalled: false, expected: 'git' },
+			{ vcsMode: 'auto', hasJjRepo: true, jjInstalled: true, expected: 'jj' },
+		];
+
+		it.each(cases)(
+			'getActiveVcsMode("$vcsMode", $hasJjRepo, $jjInstalled) should return "$expected"',
+			({ vcsMode, hasJjRepo, jjInstalled, expected }) => {
+				expect(getActiveVcsMode(vcsMode, hasJjRepo, jjInstalled)).toBe(expected);
+			}
+		);
 	});
 });

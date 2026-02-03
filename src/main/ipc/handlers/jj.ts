@@ -61,9 +61,13 @@ export function registerJjHandlers(): void {
 		'jj:isInstalled',
 		withIpcErrorLogging(handlerOpts('isInstalled'), async () => {
 			const result = await execFileNoThrow('jj', ['--version']);
-			// Check both exit code and that we got valid version output
 			const { isInstalled } = parseJjVersion(result.stdout);
-			return { installed: result.exitCode === 0 && isInstalled };
+			const installed = result.exitCode === 0 && isInstalled;
+			logger.debug(
+				`isInstalled: exitCode=${result.exitCode} (${typeof result.exitCode}), stdout="${result.stdout.trim()}", parsed=${isInstalled}, result=${installed}`,
+				LOG_CONTEXT
+			);
+			return { installed };
 		})
 	);
 
