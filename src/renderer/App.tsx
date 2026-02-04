@@ -121,6 +121,7 @@ import { useLayerStack } from './contexts/LayerStackContext';
 import { useToast } from './contexts/ToastContext';
 import { useModalContext } from './contexts/ModalContext';
 import { GitStatusProvider } from './contexts/GitStatusContext';
+import { JjStatusProvider } from './contexts/JjStatusContext';
 import { InputProvider, useInputContext } from './contexts/InputContext';
 import { GroupChatProvider, useGroupChat } from './contexts/GroupChatContext';
 import { AutoRunProvider, useAutoRun } from './contexts/AutoRunContext';
@@ -1655,6 +1656,7 @@ function MaestroConsoleInner() {
 							fullPath: subdir.path,
 							projectRoot: subdir.path,
 							isGitRepo: true,
+							vcsType: parentSession.vcsType || 'git',
 							gitBranches,
 							gitTags,
 							gitRefsCacheTime,
@@ -3244,6 +3246,7 @@ function MaestroConsoleInner() {
 											return {
 												...s,
 												isGitRepo: true,
+												vcsType: s.vcsType || 'git', // SSH sessions default to git (jj over SSH not yet supported)
 												gitBranches,
 												gitTags,
 												gitRefsCacheTime,
@@ -7810,6 +7813,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 				fullPath: worktree.path,
 				projectRoot: worktree.path,
 				isGitRepo: true,
+				vcsType: parentSession.vcsType || 'git',
 				gitBranches,
 				gitTags,
 				gitRefsCacheTime,
@@ -7994,6 +7998,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 								fullPath: subdir.path,
 								projectRoot: subdir.path,
 								isGitRepo: true,
+								vcsType: session.vcsType || 'git',
 								gitBranches,
 								gitTags,
 								gitRefsCacheTime,
@@ -9251,6 +9256,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 			// For local sessions, check git repo status immediately
 			const isRemoteSession = sessionSshRemoteConfig?.enabled && sessionSshRemoteConfig.remoteId;
 			let isGitRepo = false;
+			let vcsType: 'git' | 'jj' | undefined;
 			let gitBranches: string[] | undefined;
 			let gitTags: string[] | undefined;
 			let gitRefsCacheTime: number | undefined;
@@ -9258,6 +9264,14 @@ You are taking over this conversation. Based on the context above, provide a bri
 			if (!isRemoteSession) {
 				// Local session - check git repo status now
 				isGitRepo = await gitService.isRepo(workingDir);
+
+				// Detect effective VCS type based on user preference and repository detection
+				const detectedVcs = await detectRepositoryVcs(workingDir);
+				vcsType =
+					detectedVcs === 'none'
+						? undefined
+						: await getEffectiveVcs(workingDir, vcsMode);
+
 				if (isGitRepo) {
 					[gitBranches, gitTags] = await Promise.all([
 						gitService.getBranches(workingDir),
@@ -9294,6 +9308,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 				fullPath: workingDir,
 				projectRoot: workingDir, // Store the initial directory (never changes)
 				isGitRepo,
+				vcsType,
 				gitBranches,
 				gitTags,
 				gitRefsCacheTime,
@@ -9437,6 +9452,13 @@ You are taking over this conversation. Based on the context above, provide a bri
 				gitRefsCacheTime = Date.now();
 			}
 
+			// Detect effective VCS type based on user preference and repository detection
+			const wizardDetectedVcs = await detectRepositoryVcs(directoryPath);
+			const wizardVcsType: 'git' | 'jj' | undefined =
+				wizardDetectedVcs === 'none'
+					? undefined
+					: await getEffectiveVcs(directoryPath, vcsMode);
+
 			// Create initial tab
 			const initialTabId = generateId();
 			const initialTab: AITab = {
@@ -9468,6 +9490,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 				fullPath: directoryPath,
 				projectRoot: directoryPath,
 				isGitRepo,
+				vcsType: wizardVcsType,
 				gitBranches,
 				gitTags,
 				gitRefsCacheTime,
@@ -9637,6 +9660,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 							return {
 								...s,
 								isGitRepo: true,
+								vcsType: s.vcsType || 'git', // Preserve existing vcsType or default to git
 								gitBranches,
 								gitTags,
 								gitRefsCacheTime: Date.now(),
@@ -11525,6 +11549,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 							fullPath: subdir.path,
 							projectRoot: subdir.path,
 							isGitRepo: true,
+							vcsType: activeSession.vcsType || 'git',
 							gitBranches,
 							gitTags,
 							gitRefsCacheTime,
@@ -11706,6 +11731,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 					fullPath: worktreePath,
 					projectRoot: worktreePath,
 					isGitRepo: true,
+					vcsType: activeSession.vcsType || 'git',
 					gitBranches,
 					gitTags,
 					gitRefsCacheTime,
@@ -11859,6 +11885,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 				fullPath: worktreePath,
 				projectRoot: worktreePath,
 				isGitRepo: true,
+				vcsType: createWorktreeSession.vcsType || 'git',
 				gitBranches,
 				gitTags,
 				gitRefsCacheTime,
@@ -13297,6 +13324,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 
 	return (
 		<GitStatusProvider sessions={sessions} activeSessionId={activeSessionId}>
+		<JjStatusProvider sessions={sessions} activeSessionId={activeSessionId}>
 			<div
 				className={`flex h-screen w-full font-mono overflow-hidden transition-colors duration-300 ${
 					isMobileLandscape ? 'pt-0' : 'pt-10'
@@ -13808,7 +13836,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 								const newId = generateId();
 								const initialTabId = generateId();
 
-								// Check git repo status
+								// Check git repo status and VCS type
 								const isGitRepo = await gitService.isRepo(data.localPath);
 								let gitBranches: string[] | undefined;
 								let gitTags: string[] | undefined;
@@ -13821,6 +13849,13 @@ You are taking over this conversation. Based on the context above, provide a bri
 									]);
 									gitRefsCacheTime = Date.now();
 								}
+
+								// Detect effective VCS type
+								const symphonyDetectedVcs = await detectRepositoryVcs(data.localPath);
+								const symphonyVcsType: 'git' | 'jj' | undefined =
+									symphonyDetectedVcs === 'none'
+										? undefined
+										: await getEffectiveVcs(data.localPath, vcsMode);
 
 								// Create initial tab
 								const initialTab: AITab = {
@@ -13846,6 +13881,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 									fullPath: data.localPath,
 									projectRoot: data.localPath,
 									isGitRepo,
+									vcsType: symphonyVcsType,
 									gitBranches,
 									gitTags,
 									gitRefsCacheTime,
@@ -14446,6 +14482,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 				{/* --- TOAST NOTIFICATIONS --- */}
 				<ToastContainer theme={theme} onSessionClick={handleToastSessionClick} />
 			</div>
+		</JjStatusProvider>
 		</GitStatusProvider>
 	);
 }
