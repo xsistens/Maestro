@@ -29,11 +29,12 @@ import { TerminalOutput } from './TerminalOutput';
 import { InputArea } from './InputArea';
 import { FilePreview, FilePreviewHandle } from './FilePreview';
 import { ErrorBoundary } from './ErrorBoundary';
-import { GitStatusWidget } from './GitStatusWidget';
+import { VcsStatusWidget } from './VcsStatusWidget';
 import { AgentSessionsBrowser } from './AgentSessionsBrowser';
 import { TabBar } from './TabBar';
 import { WizardConversationView, DocumentGenerationView } from './InlineWizard';
 import { gitService } from '../services/git';
+import { jjService } from '../services/jj';
 import { remoteUrlToBrowserUrl } from '../../shared/gitUtils';
 import { useGitBranch, useGitDetail, useGitFileStatus } from '../contexts/GitStatusContext';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
@@ -824,7 +825,7 @@ export const MainPanel = React.memo(
 			[activeSession?.sshRemoteId, activeSession?.sessionSshRemoteConfig?.remoteId]
 		);
 
-		// Handler to view git diff
+		// Handler to view VCS diff (dispatches to jj or git based on session vcsType)
 		const handleViewGitDiff = async () => {
 			if (!activeSession || !activeSession.isGitRepo) return;
 
@@ -832,10 +833,17 @@ export const MainPanel = React.memo(
 				activeSession.inputMode === 'terminal'
 					? activeSession.shellCwd || activeSession.cwd
 					: activeSession.cwd;
-			const diff = await gitService.getDiff(cwd);
 
-			if (diff.diff) {
-				setGitDiffPreview(diff.diff);
+			if (activeSession.vcsType === 'jj') {
+				const jjDiff = await jjService.getDiff(cwd);
+				if (jjDiff.raw) {
+					setGitDiffPreview(jjDiff.raw);
+				}
+			} else {
+				const diff = await gitService.getDiff(cwd);
+				if (diff.diff) {
+					setGitDiffPreview(diff.diff);
+				}
 			}
 		};
 
@@ -1172,10 +1180,11 @@ export const MainPanel = React.memo(
 										</div>
 									</div>
 
-									{/* Git Status Widget */}
-									<GitStatusWidget
+									{/* VCS Status Widget - renders GitStatusWidget or JjStatusWidget based on vcsType */}
+									<VcsStatusWidget
 										sessionId={activeSession.id}
 										isGitRepo={activeSession.isGitRepo}
+										vcsType={activeSession.vcsType}
 										theme={theme}
 										onViewDiff={handleViewGitDiff}
 										onViewLog={() => setGitLogOpen?.(true)}

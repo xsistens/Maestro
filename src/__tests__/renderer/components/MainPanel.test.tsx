@@ -69,8 +69,8 @@ vi.mock('../../../renderer/components/AgentSessionsBrowser', () => ({
 	},
 }));
 
-vi.mock('../../../renderer/components/GitStatusWidget', () => ({
-	GitStatusWidget: (props: { onViewDiff: () => void }) => {
+vi.mock('../../../renderer/components/VcsStatusWidget', () => ({
+	VcsStatusWidget: (props: { onViewDiff: () => void }) => {
 		return React.createElement(
 			'div',
 			{ 'data-testid': 'git-status-widget' },
